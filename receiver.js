@@ -145,11 +145,21 @@
     }
     return null;
   }
+  /** Seconds between the live edge and the playhead (live only); null when unknown. Feeds `state.behindLiveS` and the
+   *  on-screen "behind live" text alike. */
   function behindLive() {
     if (!S.live) return null;
     if (S.fake && S.fake.behind !== undefined) return S.fake.behind;
     var r = pRange();
     if (r) return Math.max(0, r.end - pTime());
+    // Native HLS players (Chromium/Edge's, so the PC bridge) give a live stream no seekable range at all once it plays
+    // (duration Infinity, seekable empty). They still fetch each new segment as the playlist grows, so the end of what
+    // is buffered tracks the live edge to within a segment.
+    var b = video.buffered;
+    if (b && b.length) {
+      var end = b.end(b.length - 1);
+      if (isFinite(end) && end > 0) return Math.max(0, end - pTime());
+    }
     return S.status.behindLiveS;
   }
   function videoHeight() { return S.fake ? (S.fake.height || 0) : (video.videoHeight || 0); }
@@ -280,8 +290,12 @@
     var m = M.decodeFromPhone(data);
     if (!m) return;   // not JSON, unknown, malformed, or a TV → phone type: ignored
     if (event.senderId) S.phone = event.senderId;
+    var first = !S.everHeard;
     heard();
     handle(m);
+    // C4: the first word from a phone after this page (re)loaded gets our state at once, so a phone that was casting
+    // sees the item is gone and sends it again (no waiting for the 5 s state tick).
+    if (first && m.type !== 'hello') sendState(true);
   }
 
   function handle(m) {
