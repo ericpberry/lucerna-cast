@@ -1,0 +1,207 @@
+/* Lucerna's TV page. Values from docs/mockups/Tv*.dc.html (960 x 540; TvHub 1024 x 600) and SPEC › Design tokens.
+   Chrome lives on a fixed-size stage scaled to the screen (Bobbin's fit()); the video stays full-bleed under it.
+   Old-firmware rules (R8, Spool D-134/D-135): no :has(), touch selectors always scoped (body.touch-ui nav.hub),
+   never a bare .touch class. Text sizes follow the phone's TV text size (--scale, C8); body.still (reduced motion)
+   turns every transition and animation off. */
+@font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage_grotesque.woff2") format("woff2"); font-weight: 200 800; font-stretch: 75% 100%; }
+@font-face { font-family: "Instrument Sans"; src: url("fonts/instrument_sans.woff2") format("woff2"); font-weight: 400 700; font-stretch: 75% 100%; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibm_plex_mono_regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibm_plex_mono_medium.woff2") format("woff2"); font-weight: 500; }
+
+:root {
+  --tv-ground: #0B0A09; --surface: #1C1A17; --raised: #26231F; --rule: #35312B; --control: #6E685E;
+  --ink: #F4F0E8; --secondary: #A8A196; --tertiary: #CFC8BC; --bright-mono: #E6E0D5; --quiet-mono: #8A8377;
+  --lamp: #F2B54A; --on-lamp: #1A1408; --soft-lamp: #2E2416; --live: #FF5A4E; --arc-track: #4A443B;
+  --display: "Bricolage Grotesque", sans-serif;
+  --body: "Instrument Sans", sans-serif;
+  --mono: "IBM Plex Mono", monospace;
+  --scale: 1;            /* TV text size from the phone, 0.75 to 1.5 (C8) */
+  --W: 960px; --H: 540px; /* the design stage; 1024 x 600 on touch displays */
+  --sub-scale: 1;        /* subtitle size from the phone (S2) */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--tv-ground); color: var(--ink); font-family: var(--body); }
+body:focus { outline: none; }
+body.tiles-on, body.screen-play { background: #000; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; border: none; background: none; padding: 0; margin: 0; cursor: pointer; -webkit-appearance: none; appearance: none; }
+button:focus { outline: none; }
+.mono { font-family: var(--mono); font-weight: 500; }
+
+/* ---- video: full-bleed, moved into a tile slot by transform (R4) ------------------------------------------------ */
+#vwrap { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
+#media, #fakevideo { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; object-fit: contain; background: transparent; }
+body.screen-idle #vwrap, body.screen-end #vwrap, body.screen-cantplay #vwrap, body.screen-update #vwrap { visibility: hidden; }
+video::cue { font-family: var(--body); font-size: calc(30px * var(--sub-scale)); color: #fff; background: rgba(0, 0, 0, 0.72); }
+body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 0 0 2px #000; }
+
+#stage { position: absolute; left: 0; top: 0; width: var(--W); height: var(--H); transform-origin: 0 0; overflow: hidden; }
+.screen { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.dim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+
+/* ---- shared bits -------------------------------------------------------------------------------------------------- */
+.live-label { display: inline-flex; align-items: center; gap: 8px; color: var(--live); font: 600 calc(13px * var(--scale)) var(--body); letter-spacing: 1.4px; }
+.live-label i { width: 9px; height: 9px; border-radius: 50%; background: var(--live); animation: livepulse 2s ease-in-out infinite; }
+@keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.spin { display: inline-block; border-radius: 50%; border-style: solid; border-color: var(--arc-track); border-top-color: var(--lamp); animation: spin 1s linear infinite; flex: none; }
+.spin.big { width: 44px; height: 44px; border-width: 4px; }
+.spin.small { width: 16px; height: 16px; border-width: 2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.pill { position: absolute; display: flex; align-items: center; border-radius: 999px; background: rgba(11, 10, 9, 0.85); }
+.label { font-size: calc(12px * var(--scale)); font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--secondary); }
+.label.lamp { color: var(--lamp); }
+.t-title { font-family: var(--display); font-weight: 700; font-size: calc(32px * var(--scale)); line-height: calc(36px * var(--scale)); }
+.t-sub { font-size: calc(15px * var(--scale)); color: var(--tertiary); }
+.c-title { font-family: var(--display); font-weight: 700; font-size: calc(26px * var(--scale)); }
+.corner-title { position: absolute; left: 48px; bottom: 40px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.corner-meta { position: absolute; right: 48px; bottom: 44px; font: 500 calc(14px * var(--scale)) var(--mono); color: var(--quiet-mono); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; font: 600 calc(15px * var(--scale)) var(--body); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.btn.primary { background: var(--lamp); color: var(--on-lamp); }
+.btn.quiet { background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink); }
+.btn.big:focus { box-shadow: 0 0 0 3px var(--lamp); transform: scale(1.04); }
+.thumb { position: relative; overflow: hidden; border-radius: 10px; background: #3A3326; }
+.thumb img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
+.card-title { font-family: var(--display); font-weight: 700; font-size: calc(22px * var(--scale)); line-height: calc(26px * var(--scale)); }
+.meta { font-size: calc(13px * var(--scale)); color: var(--secondary); }
+
+/* ---- TvIdle ------------------------------------------------------------------------------------------------------- */
+.idle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: var(--tv-ground); }
+.idle .glow { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: radial-gradient(ellipse 560px 230px at 350px 246px, rgba(242, 181, 74, 0.10) 0%, rgba(242, 181, 74, 0) 70%); }
+.idle .brand { position: relative; display: flex; align-items: center; gap: 18px; height: 72px; }
+.idle .mark { width: 73px; height: 50px; }
+.idle .wordmark { height: 53px; margin-top: 1px; }
+.idle .hint { position: relative; margin: 0; font-size: calc(22px * var(--scale)); color: var(--tertiary); }
+.idle .foot { position: absolute; bottom: 32px; left: 48px; right: 48px; display: flex; justify-content: space-between; font: 500 calc(14px * var(--scale)) var(--mono); color: var(--quiet-mono); }
+
+/* ---- single video title overlay (fades) ------------------------------------------------------------------------- */
+.ov { opacity: 0; transition: opacity 0.4s ease; pointer-events: none; position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.ov.show { opacity: 1; }
+.ov .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 160px; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.75) 100%); }
+.ov .info { position: absolute; left: 48px; bottom: 40px; right: 48px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+
+/* ---- tiles (TvFocus) ---------------------------------------------------------------------------------------------- */
+.tiles { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+.tile { position: absolute; border-radius: 10px; overflow: hidden; background: var(--surface); text-align: left; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.tile.video { background: transparent; }
+.tile.empty { background: transparent; box-shadow: inset 0 0 0 1.5px var(--rule); }
+.tile .frames { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
+.tile .frames img { position: absolute; left: 0; top: 0; transform-origin: 0 0; opacity: 0; transition: opacity 0.12s linear; }
+.tile .frames img.on { opacity: 1; }
+.tile .ring { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 10px; pointer-events: none; }
+.tile:focus .ring { box-shadow: inset 0 0 0 2px var(--lamp); }
+.tile.snap:focus { transform: scale(1.04); }
+.tile .name { position: absolute; left: 10px; bottom: 10px; right: 10px; font: 600 calc(13px * var(--scale)) var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .fps { position: absolute; right: 8px; top: 8px; font: 500 calc(11px * var(--scale)) var(--mono); color: var(--tertiary); background: rgba(0, 0, 0, 0.6); padding: 2px 6px; border-radius: 6px; }
+.tile .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 140px; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.75) 100%); }
+.tile .info { position: absolute; left: 24px; bottom: 22px; right: 24px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.tile.small .info { left: 10px; bottom: 10px; right: 10px; gap: 4px; }
+.tile.small .shade { height: 70px; }
+.tile.small .t-title { font-size: calc(18px * var(--scale)); line-height: calc(22px * var(--scale)); }
+.tile.small .t-sub { font-size: calc(12px * var(--scale)); }
+.tile .live-mini { position: absolute; left: 10px; top: 10px; }
+body.ov-hidden .tile .info, body.ov-hidden .tile .shade { opacity: 0; }
+.tile .info, .tile .shade { transition: opacity 0.4s ease; }
+
+/* ---- TvDiscreet ----------------------------------------------------------------------------------------------------- */
+.discreet-pill { top: 40px; left: 48px; height: 44px; padding: 0 18px 0 14px; gap: 12px; }
+.discreet-pill .ic { color: var(--lamp); display: inline-flex; }
+.discreet-pill .txt { font-size: calc(15px * var(--scale)); color: var(--bright-mono); }
+.discreet-pill .mono { font-size: calc(14px * var(--scale)); color: var(--secondary); }
+
+/* ---- TvBuffering -------------------------------------------------------------------------------------------------- */
+.buffering .dim { background: rgba(11, 10, 9, 0.55); }
+.center { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; }
+.b-head { font-size: calc(22px * var(--scale)); color: var(--ink); }
+.b-sub { font-size: calc(15px * var(--scale)); color: var(--secondary); }
+
+/* ---- TvPaused ------------------------------------------------------------------------------------------------------- */
+.paused .dim { background: rgba(11, 10, 9, 0.45); }
+.paused .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 200px; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.8) 100%); }
+.pause-badge { position: absolute; left: 50%; top: 50%; width: 96px; height: 96px; margin: -78px 0 0 -48px; border-radius: 50%; background: rgba(11, 10, 9, 0.7); display: flex; align-items: center; justify-content: center; color: var(--ink); }
+.paused .bottom { position: absolute; left: 48px; right: 48px; bottom: 40px; display: flex; flex-direction: column; gap: 8px; }
+.progress-row { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
+.track { flex: 1; height: 6px; border-radius: 3px; background: var(--control); position: relative; }
+.track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 3px; background: var(--lamp); }
+.progress-row .mono { font-size: calc(15px * var(--scale)); color: var(--bright-mono); }
+
+/* ---- TvUpNext ------------------------------------------------------------------------------------------------------- */
+.upnext .side-shade { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.15) 50%, rgba(11, 10, 9, 0.92) 72%, rgba(11, 10, 9, 0.96) 100%); }
+.upnext .now { position: absolute; left: 40px; bottom: 36px; display: flex; flex-direction: column; gap: 6px; }
+.upnext .now .mono { font-size: calc(14px * var(--scale)); color: var(--bright-mono); }
+.upnext .col { position: absolute; top: 40px; right: 40px; width: 300px; display: flex; flex-direction: column; gap: 18px; }
+.upnext .card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: var(--surface); transition: box-shadow 0.15s ease; }
+.upnext .card.focus { box-shadow: inset 0 0 0 2px var(--lamp); }
+.upnext .thumb { height: 132px; }
+.upnext .btn { height: 44px; }
+.upnext .then { display: flex; flex-direction: column; gap: 10px; }
+.then-row { display: flex; align-items: center; gap: 12px; }
+.then-row .mini { width: 64px; height: 36px; border-radius: 6px; background: #2C2638; flex: none; }
+.then-title { font-size: calc(15px * var(--scale)); }
+.live-word { color: var(--live); font-size: calc(12px * var(--scale)); font-weight: 600; }
+
+/* ---- reconnecting banner ------------------------------------------------------------------------------------------ */
+.banner { top: 40px; left: 40px; height: 40px; padding: 0 16px; gap: 10px; font-size: calc(14px * var(--scale)); color: var(--bright-mono); }
+
+/* ---- TvPhoneLost and "Starting…" ---------------------------------------------------------------------------------- */
+.phonelost .dim, .starting .dim { background: rgba(11, 10, 9, 0.78); }
+.center .h { font-family: var(--display); font-weight: 700; font-size: calc(32px * var(--scale)); line-height: calc(38px * var(--scale)); max-width: 820px; }
+.center .p { font-size: calc(19px * var(--scale)); color: var(--tertiary); line-height: calc(28px * var(--scale)); max-width: 560px; }
+.kept { margin-top: 6px; height: 34px; padding: 0 16px; border-radius: 999px; background: var(--surface); font-size: calc(14px * var(--scale)); color: var(--bright-mono); display: inline-flex; align-items: center; }
+.phonelost .corner-meta { bottom: 36px; }
+
+/* ---- TvCantPlay and "Update Lucerna on your phone" ----------------------------------------------------------------- */
+.message { background: var(--tv-ground); display: flex; align-items: center; padding: 0 96px; }
+.message .msg { display: flex; flex-direction: column; gap: 18px; max-width: 700px; align-items: flex-start; }
+.icon-tile { width: 56px; height: 56px; border-radius: 16px; background: var(--soft-lamp); color: var(--lamp); display: flex; align-items: center; justify-content: center; }
+.message .h { font-family: var(--display); font-weight: 700; font-size: calc(34px * var(--scale)); line-height: calc(40px * var(--scale)); letter-spacing: -0.4px; }
+.message .p { font-size: calc(19px * var(--scale)); color: var(--tertiary); line-height: calc(28px * var(--scale)); }
+.message .detail { align-self: stretch; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding: 14px 16px; border-radius: 12px; background: var(--surface); font: 500 calc(14px * var(--scale)) var(--mono); color: var(--secondary); }
+.foot-left { position: absolute; left: 96px; bottom: 34px; font: 500 calc(14px * var(--scale)) var(--mono); color: var(--quiet-mono); }
+
+/* ---- TvEnd ------------------------------------------------------------------------------------------------------- */
+.endboard { background: var(--tv-ground); padding: 56px 64px; display: grid; grid-template-columns: 1fr 340px; gap: 56px; align-items: center; }
+.endboard .left { display: flex; flex-direction: column; gap: 18px; align-items: flex-start; }
+.endboard .mark-small { width: 44px; height: 30px; }
+.endboard .h { font-family: var(--display); font-weight: 700; font-size: calc(40px * var(--scale)); line-height: calc(44px * var(--scale)); letter-spacing: -0.6px; }
+.endboard .p { font-size: calc(18px * var(--scale)); color: var(--tertiary); line-height: calc(26px * var(--scale)); }
+.endboard .buttons { display: flex; gap: 14px; margin-top: 14px; }
+.endboard .btn.big { height: 52px; padding: 0 26px; font-size: calc(17px * var(--scale)); }
+.endboard .card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; background: var(--surface); }
+.endboard .thumb { height: 168px; background: linear-gradient(160deg, #46402F 0%, #3A3326 60%, #2E291F 100%); }
+.endboard .foot-left { left: 64px; }
+
+/* ---- Nest Hub / touch (TvHub): all selectors scoped to body.touch-ui nav.hub -------------------------------------- */
+body.touch-ui nav.hub { position: absolute; left: 0; top: 0; right: 0; bottom: 0; transition: opacity 0.3s ease; }
+body.touch-ui nav.hub.faded { opacity: 0; pointer-events: none; }
+body.touch-ui nav.hub .hub-shade-top { position: absolute; left: 0; right: 0; top: 0; height: 160px; background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 100%); }
+body.touch-ui nav.hub .hub-shade-bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 260px; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 100%); }
+body.touch-ui nav.hub .hub-title { position: absolute; left: 32px; top: 28px; right: 260px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+body.touch-ui nav.hub .hub-title .h { font-family: var(--display); font-weight: 700; font-size: calc(34px * var(--scale)); line-height: calc(38px * var(--scale)); }
+body.touch-ui nav.hub .hub-title .s { font-size: calc(16px * var(--scale)); color: var(--tertiary); }
+body.touch-ui nav.hub .hub-btn { height: 64px; padding: 0 24px; border-radius: 999px; display: inline-flex; align-items: center; gap: 10px; font: 600 calc(18px * var(--scale)) var(--body); flex: none; }
+body.touch-ui nav.hub .hub-tiles { position: absolute; right: 32px; top: 32px; background: rgba(28, 26, 23, 0.92); color: var(--ink); }
+body.touch-ui nav.hub .hub-scrub { position: absolute; left: 32px; right: 32px; bottom: 132px; display: flex; align-items: center; gap: 16px; }
+body.touch-ui nav.hub .hub-track { flex: 1; height: 8px; border-radius: 4px; background: var(--control); position: relative; }
+body.touch-ui nav.hub .hub-track::before { content: ""; position: absolute; left: 0; right: 0; top: -28px; bottom: -28px; }
+body.touch-ui nav.hub .hub-track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 4px; background: var(--lamp); }
+body.touch-ui nav.hub .hub-track .knob { position: absolute; left: 0; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: var(--lamp); }
+body.touch-ui nav.hub .hub-scrub .mono { font-size: calc(16px * var(--scale)); color: var(--bright-mono); }
+body.touch-ui nav.hub .hub-live { box-shadow: inset 0 0 0 1.5px var(--live); color: var(--live); }
+body.touch-ui nav.hub .hub-transport { position: absolute; left: 0; right: 0; bottom: 32px; display: flex; justify-content: center; align-items: center; gap: 40px; }
+body.touch-ui nav.hub .hub-round { width: 72px; height: 72px; border-radius: 50%; background: rgba(28, 26, 23, 0.92); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; }
+body.touch-ui nav.hub .hub-play { width: 88px; height: 88px; background: var(--lamp); color: var(--on-lamp); }
+body.touch-ui nav.hub .hub-play .i-play { display: none; }
+body.touch-ui nav.hub.is-paused .hub-play .i-play { display: block; }
+body.touch-ui nav.hub.is-paused .hub-play .i-pause { display: none; }
+body.touch-ui nav.hub .hub-count { position: absolute; right: 32px; bottom: 52px; font-size: calc(14px * var(--scale)); color: var(--secondary); }
+body.touch-ui nav.hub .hub-btn:focus, body.touch-ui nav.hub .hub-round:focus { box-shadow: 0 0 0 3px var(--lamp); }
+body.touch-ui nav.hub .hub-live:focus { box-shadow: inset 0 0 0 1.5px var(--live), 0 0 0 3px var(--lamp); }
+body.touch-ui nav.hub.over-tiles .hub-title, body.touch-ui nav.hub.over-tiles .hub-scrub, body.touch-ui nav.hub.over-tiles .hub-shade-top { display: none; }
+/* On touch displays the hub replaces the fading title overlay and the paused card. */
+body.touch-ui #ov, body.touch-ui #paused { display: none; }
+
+/* ---- discreet (C9): no titles or pictures ------------------------------------------------------------------------ */
+body.discreet #ov, body.discreet .tile .info, body.discreet .tile .name, body.discreet .thumb img { display: none; }
+
+/* ---- reduced motion (C8): nothing moves --------------------------------------------------------------------------- */
+body.still *, body.still *::before, body.still *::after { transition: none !important; animation: none !important; }

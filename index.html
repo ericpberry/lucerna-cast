@@ -1,0 +1,215 @@
+<!doctype html>
+<!--
+  Lucerna's TV page: a Google Cast Web Receiver (CAF v3) for every Cast device (SPEC.md R1 to R9). Published from
+  receiver/ in the private lucerna repo to the public ericpberry/lucerna-cast repo (GitHub Pages) by
+  scripts/publish-receiver.sh. It loads only Google's Cast receiver library and its own files: no CDNs, no analytics,
+  fonts bundled. Video comes from Lucerna on the phone (its relay) or straight from the site; everything else arrives
+  as JSON on urn:x-cast:app.lucerna (messages.js mirrors core/cast/TvMessages.kt).
+  In a desktop browser: ?preview=<state> (idle, playing, focus, focus2, focus3, focus4, onePlusThree, combines,
+  buffering, paused, upnext, reconnecting, end, discreet, cantplay, phonelost, hub, starting, update) with &touch=1,
+  &still=1, &scale=1.5. Tests: ?stub=1 (localhost only) swaps in fixtures/cast_stub/cast_stub.js, served beside this
+  folder as ../cast_stub/ (receiver/test/serve.js); &bridge=ws://... is read by the stub.
+  Structure from Bobbin's and Spool's receivers (bobbin@2004efc:receiver/index.html, spool@894e264:receiver/), redrawn
+  to docs/mockups/Tv*.dc.html.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lucerna</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    (function () {
+      var q = new URLSearchParams(location.search);
+      var local = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+      var mode = q.has('preview') ? 'preview' : (q.get('stub') === '1' && local ? 'stub' : 'cast');
+      window.LUCERNA_MODE = mode;
+      if (mode === 'cast') document.write('<script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"><\/script>');
+      else if (mode === 'stub') document.write('<script src="../cast_stub/cast_stub.js"><\/script>');
+    })();
+  </script>
+</head>
+<body class="screen-idle" tabindex="-1">
+  <!-- The video stays full-bleed, outside the scaled stage (FAMILY-LESSONS 1b); tiles move it with a CSS transform. -->
+  <div id="vwrap"><video id="media" playsinline></video><div id="fakevideo" hidden></div></div>
+
+  <div id="stage">
+
+    <!-- TvIdle -->
+    <section id="idle" class="screen idle">
+      <div class="glow"></div>
+      <div class="brand">
+        <img class="mark" src="lucerna-mark.svg" alt="">
+        <img class="wordmark" src="lucerna-wordmark-dark.svg" alt="lucerna">
+      </div>
+      <p class="hint">Ready to play from Lucerna on your phone</p>
+      <div class="foot"><span id="idleTv"></span><span>Nothing is shown here until you press play</span></div>
+    </section>
+
+    <!-- Tiles: Focus + motion snapshots (TvFocus), and Phone combines chrome (R4, R5) -->
+    <section id="tiles" class="tiles" hidden></section>
+
+    <!-- Playing a single video: the title overlay that fades (TvFocus without tiles) -->
+    <section id="ov" class="ov">
+      <div class="shade"></div>
+      <div class="info">
+        <span class="live-label" id="ovLive"><i></i>LIVE</span>
+        <span class="t-title" id="ovTitle"></span>
+        <span class="t-sub" id="ovSub"></span>
+      </div>
+    </section>
+
+    <!-- TvDiscreet -->
+    <div id="discreetPill" class="pill discreet-pill" hidden>
+      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M11 18.5h2"></path></svg></span>
+      <span class="txt">Playing from a phone</span>
+      <span class="mono" id="discreetTime">0:00:00</span>
+    </div>
+
+    <!-- TvBuffering -->
+    <section id="buffering" class="screen buffering" hidden>
+      <div class="dim"></div>
+      <div class="center">
+        <span class="spin big"></span>
+        <span class="b-head" id="bufHead">Catching up to live</span>
+        <span class="b-sub">Loading the stream from your phone. This takes a few seconds.</span>
+      </div>
+      <div class="corner-title">
+        <span class="live-label" id="bufLive"><i></i>LIVE</span>
+        <span class="c-title" id="bufTitle"></span>
+      </div>
+      <span class="corner-meta" id="bufMeta"></span>
+    </section>
+
+    <!-- TvPaused -->
+    <section id="paused" class="screen paused" hidden>
+      <div class="dim"></div>
+      <div class="shade"></div>
+      <div class="pause-badge"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg></div>
+      <div class="bottom">
+        <span class="t-title" id="pauseTitle"></span>
+        <span class="t-sub" id="pauseSub"></span>
+        <div class="progress-row">
+          <div class="track"><div class="fill" id="pauseFill"></div></div>
+          <span class="mono" id="pauseTime"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- TvUpNext (Q3) -->
+    <section id="upnext" class="screen upnext" hidden>
+      <div class="side-shade"></div>
+      <div class="now">
+        <span class="mono" id="unTime"></span>
+        <span class="c-title" id="unNowTitle"></span>
+      </div>
+      <div class="col">
+        <div class="card" id="unCard">
+          <span class="label lamp" id="unLabel">Up next</span>
+          <div class="thumb" id="unThumb"><img alt="" hidden></div>
+          <span class="card-title" id="unTitle"></span>
+          <span class="mono meta" id="unMeta"></span>
+          <button class="btn primary" id="unPlay" type="button">Play now</button>
+        </div>
+        <div class="then" id="unThen" hidden>
+          <span class="label">Then</span>
+          <div class="then-row"><div class="mini"></div><span class="then-title"><span id="unThenTitle"></span> <span class="live-word" id="unThenLive">LIVE</span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TvPhoneLost -->
+    <section id="phonelost" class="screen phonelost" hidden>
+      <div class="dim"></div>
+      <div class="center">
+        <span class="spin big"></span>
+        <span class="h">Lost contact with your phone</span>
+        <span class="p">Keep Lucerna open on the same Wi-Fi. It picks up again by itself.</span>
+        <span class="kept" id="lostKept">Your place is kept</span>
+      </div>
+      <span class="corner-meta" id="lostTimer">trying again · 0:00</span>
+    </section>
+
+    <!-- "Starting <title>…" (Spool D-115) -->
+    <section id="starting" class="screen starting" hidden>
+      <div class="dim"></div>
+      <div class="center">
+        <span class="spin big"></span>
+        <span class="h" id="startTitle">Starting…</span>
+        <span class="p">Connecting to the stream…</span>
+      </div>
+    </section>
+
+    <!-- TvCantPlay, and the same layout for "Update Lucerna on your phone" -->
+    <section id="cantplay" class="screen message" hidden>
+      <div class="msg">
+        <span class="icon-tile"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"></path><path d="M3 12a8 8 0 0 1 8 8"></path><path d="M3 16a4 4 0 0 1 4 4"></path></svg></span>
+        <span class="h">This TV can't play this video's format</span>
+        <span class="p">Lucerna can play it on your phone instead. Choose on your phone.</span>
+        <div class="detail"><span id="cpTitle"></span><span id="cpDetail"></span></div>
+      </div>
+      <span class="foot-left" id="cpTv"></span>
+    </section>
+
+    <section id="update" class="screen message" hidden>
+      <div class="msg">
+        <span class="icon-tile"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M11 18.5h2"></path></svg></span>
+        <span class="h">Update Lucerna on your phone</span>
+        <span class="p">Your phone speaks a newer version of Lucerna than this TV page. Update the app, then cast again.</span>
+        <div class="detail"><span id="upDetail"></span></div>
+      </div>
+      <span class="foot-left" id="upTv"></span>
+    </section>
+
+    <!-- TvEnd: a board chosen with the remote; real buttons, the first one focused (Spool D-116) -->
+    <section id="end" class="screen endboard" hidden>
+      <div class="left">
+        <img class="mark-small" src="lucerna-mark.svg" alt="">
+        <span class="h">That's the end of the queue</span>
+        <span class="p">Add more from your phone, or play something again.</span>
+        <div class="buttons">
+          <button class="btn big primary" id="endAgain" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>Play again</button>
+          <button class="btn big quiet" id="endStart" type="button">Back to the start</button>
+        </div>
+      </div>
+      <div class="card last" id="endCard">
+        <span class="label">Last played</span>
+        <div class="thumb" id="endThumb"><img alt="" hidden></div>
+        <span class="card-title" id="endTitle"></span>
+        <span class="mono meta" id="endMeta"></span>
+      </div>
+      <span class="foot-left" id="endFoot"></span>
+    </section>
+
+    <!-- Reconnecting stream banner (TvUpNext's top-left pill): status.relayState refreshing/lost, or a live IDLE held 2 s -->
+    <div id="banner" class="pill banner" hidden><span class="spin small"></span><span>Stream hiccup, reconnecting. Your place is kept.</span></div>
+
+    <!-- Nest Hub and other touch displays (TvHub, R7): chosen from device capabilities, never the viewport -->
+    <nav id="hub" class="hub" hidden>
+      <div class="hub-shade-top"></div>
+      <div class="hub-shade-bottom"></div>
+      <div class="hub-title">
+        <span class="live-label" id="hubLive"><i></i>LIVE</span>
+        <span class="h" id="hubTitle"></span>
+        <span class="s" id="hubSub"></span>
+      </div>
+      <button class="hub-btn hub-tiles" id="hubTiles" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"></rect><rect x="13" y="3" width="8" height="8" rx="1.5"></rect><rect x="3" y="13" width="8" height="8" rx="1.5"></rect><rect x="13" y="13" width="8" height="8" rx="1.5"></rect></svg><span id="hubTilesLabel">Tiles</span></button>
+      <div class="hub-scrub">
+        <div class="hub-track" id="hubTrack"><div class="fill" id="hubFill"></div><span class="knob" id="hubKnob"></span></div>
+        <span class="mono" id="hubBehind"></span>
+        <button class="hub-btn hub-live" id="hubJump" type="button">Jump to live</button>
+      </div>
+      <div class="hub-transport">
+        <button class="hub-round" id="hubBack" type="button" aria-label="Back 10 seconds"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg></button>
+        <button class="hub-round hub-play" id="hubToggle" type="button" aria-label="Pause"><svg class="i-pause" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg><svg class="i-play" width="30" height="30" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg></button>
+        <button class="hub-round" id="hubNext" type="button" aria-label="Next in queue"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5l10 7-10 7z" fill="currentColor"></path><path d="M18 5v14"></path></svg></button>
+      </div>
+      <span class="hub-count mono" id="hubCount"></span>
+    </nav>
+
+  </div>
+
+  <script src="messages.js"></script>
+  <script src="receiver.js"></script>
+</body>
+</html>
