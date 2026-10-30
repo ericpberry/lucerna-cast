@@ -114,6 +114,9 @@
     stage.style.left = view.x + 'px';
     stage.style.top = view.y + 'px';
     stage.style.transform = 'scale(' + view.s + ')';
+    // The stage size can change after the tiles were laid out (touch is known only after caps): lay them out again
+    // so the slots match the 1024 x 600 stage (R-39).
+    if (tileEls && tileEls.length && S.tiles) buildTiles(false);
     placeVideo();
   }
   window.addEventListener('resize', fit);
@@ -388,6 +391,21 @@
     return null;
   }
 
+  /**
+   * Touch displays (TvHub) keep a control band under the tiles so the hub's buttons never cover a tile, its LIVE label
+   * or its chips (R-39). Tiles keep the same geometry whether the hub is showing or faded.
+   */
+  var TOUCH_BAND = 112;
+  function tileRects() { return layoutRects(S.tiles.layout, view.W, view.H - (S.touch ? TOUCH_BAND : 0)); }
+  /** 5% title safe (R-18): text and chips on video never sit closer to the frame edge than this (48 x 27 at 960 x 540). */
+  function safeInsets(r, small) {
+    var bx = small ? 10 : 16, by = small ? 10 : 14, sx = view.W * 0.05, sy = view.H * 0.05;
+    return {
+      l: Math.max(bx, sx - r.x), t: Math.max(by, sy - r.y),
+      r: Math.max(bx, sx - (view.W - r.x - r.w)), b: Math.max(by, sy - (view.H - r.y - r.h))
+    };
+  }
+
   /** Slot rectangles in stage pixels: 16 px margin, 8 px gaps (TvFocus). */
   function layoutRects(layout, W, H) {
     var p = 16, g = 8, iw = W - 2 * p, ih = H - 2 * p, w, h, wl, wr, hr, y;
@@ -432,16 +450,21 @@
         frames.appendChild(a); frames.appendChild(c);
         b.appendChild(frames);
         b.appendChild(el('div', 'shade'));
+        // One label rule on both TV surfaces (R-18): title pill top-left, LIVE or time pill bottom-left, chips
+        // top-right, every one on a 75% black scrim and inside the 5% title-safe area, in every layout.
         var info = el('div', 'info');
-        info.appendChild(liveLabel());
         info.appendChild(el('span', 't-title'));
         info.appendChild(el('span', 't-sub'));
         b.appendChild(info);
         b.appendChild(el('span', 'name'));
+        var status = el('span', 'status');
+        status.appendChild(liveLabel());
+        status.appendChild(el('span', 'st-time mono'));
+        b.appendChild(status);
         b.appendChild(el('span', 'fps'));
         b.appendChild(el('span', 'ring'));
         b.addEventListener('click', function () { if (!S.touch) return; chooseTile(i); });
-        var t = { btn: b, frames: frames, imgs: [a, c], front: 0, info: info, name: b.querySelector('.name'), fps: b.querySelector('.fps'), loading: false, nat: null };
+        var t = { btn: b, frames: frames, imgs: [a, c], front: 0, info: info, status: status, name: b.querySelector('.name'), fps: b.querySelector('.fps'), loading: false, nat: null };
         [a, c].forEach(function (img, k) {
           img.addEventListener('load', function () { onFrameLoaded(t, k); });
           img.addEventListener('error', function () { onFrameFailed(t, k); });
@@ -450,11 +473,15 @@
         return t;
       });
     }
-    var rects = layoutRects(S.tiles.layout, view.W, view.H);
+    var rects = tileRects();
     S.tiles.slots.forEach(function (slot, i) {
       var t = tileEls[i], r = rects[i];
       var b = t.btn;
       b.style.left = r.x + 'px'; b.style.top = r.y + 'px'; b.style.width = r.w + 'px'; b.style.height = r.h + 'px';
+      var ins = safeInsets(r, r.w < 400);
+      b.style.setProperty('--sl', ins.l.toFixed(1) + 'px'); b.style.setProperty('--st', ins.t.toFixed(1) + 'px');
+      b.style.setProperty('--sr', ins.r.toFixed(1) + 'px'); b.style.setProperty('--sb', ins.b.toFixed(1) + 'px');
+      cls(b, 'chosen', !!S.touch && i === S.tiles.focused);
       var isVideo = mode === 'focus' && i === S.tiles.focused;
       var empty = !slot.itemId && !slot.title && !slot.color;
       cls(b, 'video', isVideo || mode === 'combines');
@@ -483,9 +510,14 @@
       var title = S.hello.discreet ? '' : slot.title;
       var showInfo = t.isVideo || mode === 'combines';
       show(t.info, showInfo);
-      show(t.btn.querySelector('.shade'), showInfo);
-      var ll = t.info.querySelector('.live-label');
-      show(ll, slot.live);
+      show(t.btn.querySelector('.shade'), false);   // the labels carry their own scrim (R-18)
+      // LIVE, or the time on the video tile, bottom-left on its own scrim pill: never faded, never moved (R-18).
+      var dur = pDuration();
+      var timeText = !slot.live && t.isVideo && dur > 0 ? fmt(pTime(), dur >= 3600) + ' / ' + fmt(dur, dur >= 3600) : '';
+      show(t.status.querySelector('.live-label'), !!slot.live);
+      setText(t.status.querySelector('.st-time'), timeText);
+      show(t.status.querySelector('.st-time'), !!timeText);
+      show(t.status, !!slot.live || !!timeText);
       setText(t.info.querySelector('.t-title'), title || (t.isVideo ? curTitle() : ''));
       var subParts = [];
       var slotItem = slot.itemId ? S.items[slot.itemId] : null;
@@ -524,7 +556,7 @@
       wrap.style.clipPath = ''; wrap.style.webkitClipPath = '';
       return;
     }
-    var r = layoutRects(S.tiles.layout, view.W, view.H)[S.tiles.focused];
+    var r = tileRects()[S.tiles.focused];
     var slot = S.tiles.slots[S.tiles.focused];
     var sx = view.x + r.x * view.s, sy = view.y + r.y * view.s, sw = r.w * view.s, sh = r.h * view.s;
     var aspect = (!PREVIEW && video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 16 / 9;
@@ -1200,7 +1232,7 @@
 
   // ---- debug handle for tests and the diagnostics overlay ------------------------------------------------------------------
   window.__lucerna = {
-    S: S, T: T, render: render, layoutRects: layoutRects, supportedCodecs: supportedCodecs,
+    S: S, T: T, render: render, layoutRects: layoutRects, tileRects: function () { return S.tiles ? tileRects() : []; }, supportedCodecs: supportedCodecs,
     lastPlaybackConfig: function () { return lastCfg; }, applySubtitleOffset: applySubtitleOffset, fit: fit
   };
 

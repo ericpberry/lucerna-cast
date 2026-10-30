@@ -41,6 +41,8 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 
 /* ---- shared bits -------------------------------------------------------------------------------------------------- */
 .live-label { display: inline-flex; align-items: center; gap: 8px; color: var(--live); font: 600 calc(13px * var(--scale)) var(--body); letter-spacing: 1.4px; }
+/* R-18: a label drawn on video sits on a scrim pill (75% black) so it reads on any frame. */
+.live-label.scrim, .scrim { background: rgba(0, 0, 0, 0.75); border-radius: 999px; padding: 4px 12px; }
 .live-label i { width: 9px; height: 9px; border-radius: 50%; background: var(--live); animation: livepulse 2s ease-in-out infinite; }
 @keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .spin { display: inline-block; border-radius: 50%; border-style: solid; border-color: var(--arc-track); border-top-color: var(--lamp); animation: spin 1s linear infinite; flex: none; }
@@ -90,17 +92,23 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .tile .ring { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 10px; pointer-events: none; }
 .tile:focus .ring { box-shadow: inset 0 0 0 2px var(--lamp); }
 .tile.snap:focus { transform: scale(1.04); }
-.tile .name { position: absolute; left: 10px; bottom: 10px; right: 10px; font: 600 calc(13px * var(--scale)) var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile .fps { position: absolute; right: 8px; top: 8px; font: 500 calc(11px * var(--scale)) var(--mono); color: var(--tertiary); background: rgba(0, 0, 0, 0.6); padding: 2px 6px; border-radius: 6px; }
-.tile .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 140px; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.75) 100%); }
-.tile .info { position: absolute; left: 24px; bottom: 22px; right: 24px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.tile.small .info { left: 10px; bottom: 10px; right: 10px; gap: 4px; }
-.tile.small .shade { height: 70px; }
-.tile.small .t-title { font-size: calc(18px * var(--scale)); line-height: calc(22px * var(--scale)); }
-.tile.small .t-sub { font-size: calc(12px * var(--scale)); }
-.tile .live-mini { position: absolute; left: 10px; top: 10px; }
-body.ov-hidden .tile .info, body.ov-hidden .tile .shade { opacity: 0; }
-.tile .info, .tile .shade { transition: opacity 0.4s ease; }
+/* One label rule on both TV surfaces (R-18): title pill top-left, LIVE or time pill bottom-left, chips top-right; all on
+   a 75% black scrim; insets (--sl/--st/--sr/--sb, set per tile) keep them inside the 5% title-safe area of the frame. */
+.tile .name { position: absolute; left: var(--sl, 10px); top: var(--st, 10px); max-width: calc(100% - var(--sl, 10px) - var(--sr, 10px) - 60px); padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); font: 600 calc(13px * var(--scale)) var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .fps { position: absolute; right: var(--sr, 8px); top: var(--st, 8px); font: 500 calc(11px * var(--scale)) var(--mono); color: var(--tertiary); background: rgba(0, 0, 0, 0.75); padding: 2px 6px; border-radius: 6px; }
+.tile .shade { display: none; }
+.tile .info { position: absolute; left: var(--sl, 16px); top: var(--st, 14px); max-width: calc(100% - var(--sl, 16px) - var(--sr, 16px)); display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 8px 16px; border-radius: 16px; background: rgba(0, 0, 0, 0.75); }
+.tile .info .t-title { font-size: calc(22px * var(--scale)); line-height: calc(26px * var(--scale)); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .info .t-sub { font-size: calc(13px * var(--scale)); }
+.tile .info .t-sub:empty { display: none; }
+.tile.small .info { padding: 4px 10px; border-radius: 12px; }
+.tile.small .t-title { font-size: calc(15px * var(--scale)); line-height: calc(19px * var(--scale)); }
+.tile.small .t-sub { font-size: calc(11px * var(--scale)); }
+.tile .status { position: absolute; left: var(--sl, 16px); bottom: var(--sb, 14px); display: inline-flex; align-items: center; gap: 10px; padding: 4px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); }
+.tile .status .live-label { font-size: calc(12px * var(--scale)); }
+.tile .status .st-time { font-size: calc(12px * var(--scale)); color: var(--bright-mono); }
+body.ov-hidden .tile .info { opacity: 0; }
+.tile .info { transition: opacity 0.4s ease; }
 
 /* ---- TvDiscreet ----------------------------------------------------------------------------------------------------- */
 .discreet-pill { top: 40px; left: 48px; height: 44px; padding: 0 18px 0 14px; gap: 12px; }
@@ -126,9 +134,9 @@ body.ov-hidden .tile .info, body.ov-hidden .tile .shade { opacity: 0; }
 
 /* ---- TvUpNext ------------------------------------------------------------------------------------------------------- */
 .upnext .side-shade { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.15) 50%, rgba(11, 10, 9, 0.92) 72%, rgba(11, 10, 9, 0.96) 100%); }
-.upnext .now { position: absolute; left: 40px; bottom: 36px; display: flex; flex-direction: column; gap: 6px; }
+.upnext .now { position: absolute; left: 48px; bottom: 36px; display: flex; flex-direction: column; gap: 6px; }
 .upnext .now .mono { font-size: calc(14px * var(--scale)); color: var(--bright-mono); }
-.upnext .col { position: absolute; top: 40px; right: 40px; width: 300px; display: flex; flex-direction: column; gap: 18px; }
+.upnext .col { position: absolute; top: 40px; right: 48px; width: 300px; display: flex; flex-direction: column; gap: 18px; }
 .upnext .card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: var(--surface); transition: box-shadow 0.15s ease; }
 .upnext .card.focus { box-shadow: inset 0 0 0 2px var(--lamp); }
 .upnext .thumb { height: 132px; }
@@ -140,7 +148,7 @@ body.ov-hidden .tile .info, body.ov-hidden .tile .shade { opacity: 0; }
 .live-word { color: var(--live); font-size: calc(12px * var(--scale)); font-weight: 600; }
 
 /* ---- reconnecting banner ------------------------------------------------------------------------------------------ */
-.banner { top: 40px; left: 40px; height: 40px; padding: 0 16px; gap: 10px; font-size: calc(14px * var(--scale)); color: var(--bright-mono); }
+.banner { top: 40px; left: 48px; height: 40px; padding: 0 16px; gap: 10px; font-size: calc(14px * var(--scale)); color: var(--bright-mono); }
 
 /* ---- TvPhoneLost and "Starting…" ---------------------------------------------------------------------------------- */
 .phonelost .dim, .starting .dim { background: rgba(11, 10, 9, 0.78); }
@@ -197,6 +205,16 @@ body.touch-ui nav.hub .hub-count { position: absolute; right: 32px; bottom: 52px
 body.touch-ui nav.hub .hub-btn:focus, body.touch-ui nav.hub .hub-round:focus { box-shadow: 0 0 0 3px var(--lamp); }
 body.touch-ui nav.hub .hub-live:focus { box-shadow: inset 0 0 0 1.5px var(--live), 0 0 0 3px var(--lamp); }
 body.touch-ui nav.hub.over-tiles .hub-title, body.touch-ui nav.hub.over-tiles .hub-scrub, body.touch-ui nav.hub.over-tiles .hub-shade-top { display: none; }
+/* Over tiles (R-39): the controls sit in the band under the tiles (TOUCH_BAND in receiver.js), never over a tile;
+   "One video" (a single-rectangle icon) moves into the band; the chosen tile gets the amber selected ring. */
+body.touch-ui nav.hub .hub-tiles .i-one { display: none; }
+body.touch-ui nav.hub.over-tiles .hub-tiles .i-one { display: block; }
+body.touch-ui nav.hub.over-tiles .hub-tiles .i-grid { display: none; }
+body.touch-ui nav.hub.over-tiles .hub-shade-bottom { display: none; }
+body.touch-ui nav.hub.over-tiles .hub-tiles { top: auto; right: auto; left: 52px; bottom: 24px; }
+body.touch-ui nav.hub.over-tiles .hub-transport { bottom: 12px; }
+body.touch-ui nav.hub.over-tiles .hub-count { right: 52px; bottom: 46px; }
+body.touch-ui #tiles .tile.chosen .ring { box-shadow: inset 0 0 0 3px var(--lamp); }
 /* On touch displays the hub replaces the fading title overlay and the paused card. */
 body.touch-ui #ov, body.touch-ui #paused { display: none; }
 
