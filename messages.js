@@ -29,7 +29,7 @@
   S.NextUp = [['title', 'string', ''], ['startsInS', 'int', 15]];
   S.Crop = [['l', 'float', 0], ['t', 'float', 0], ['r', 'float', 1], ['b', 'float', 1]];
   S.TileSlotMsg = [['index', 'int', 0], ['itemId', 'string?', null], ['title', 'string', ''], ['live', 'bool', false],
-    ['url', 'string?', null], ['crop', 'obj:Crop', 'new'], ['zoom', 'float', 1]];
+    ['url', 'string?', null], ['crop', 'obj:Crop', 'new'], ['zoom', 'float', 1], ['note', 'string?', null]];
   S.QueueEntry = [['id', 'string', ''], ['title', 'string', ''], ['live', 'bool', false], ['durationMs', 'long?', null]];
 
   var T = {};

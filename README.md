@@ -7,4 +7,4 @@ The page loads only Google's Cast receiver library and its own files: no analyti
 
 Fonts: Bricolage Grotesque, Instrument Sans, and IBM Plex Mono, under the SIL Open Font License (texts in fonts/).
 
-Published from Lucerna's source (commit 87c6353); changes made here are overwritten.
+Published from Lucerna's source (commit fa0ff0c); changes made here are overwritten.

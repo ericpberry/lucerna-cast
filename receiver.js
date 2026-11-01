@@ -15,6 +15,8 @@
   var MODE = window.LUCERNA_MODE || 'cast';
   var params = new URLSearchParams(location.search);
   var PREVIEW = MODE === 'preview' ? (params.get('preview') || 'idle') : null;
+  /** m11: diagnostics on the TV page (the tiles' snapshot rate) only with ?debug=1. */
+  var DEBUG = params.get('debug') === '1';
   var body = document.body;
   function $(id) { return document.getElementById(id); }
 
@@ -29,7 +31,9 @@
     // R-89: after a minute of "Trying for", the board says what to do on the phone.
     LOST_HELP_MS: 60000,
     // R-8, R-64: the same "behind live" words on every TV surface (tv/…/ui/ControlsScreen.kt mirrors this).
-    AT_LIVE_S: 1.5
+    AT_LIVE_S: 1.5,
+    // m7: the most of the player's own delay counted as its place at live (CastController.MAX_LIVE_BASELINE_S).
+    MAX_LIVE_BASE_S: 45
   };
 
   // ---- state ------------------------------------------------------------------------------------------------------------
@@ -78,6 +82,7 @@
     lastKeyAt: 0,
     upNextShownFor: null,
     pausedSince: 0,         // R-67: when the current pause began (0 = not paused)
+    liveBase: null,         // m7: the player's own delay at live (s), least reported while playing since this LOAD
     endSince: 0,            // R-67: when the end-of-queue board appeared
     fake: null              // preview: the pretend player
   };
@@ -173,8 +178,19 @@
     }
     return S.status.behindLiveS;
   }
+  /**
+   * m7: what the phone shows, by the phone's own rule (CastController): a live player sits a few segments behind the
+   * playlist's end on purpose, and the least delay it reported while playing since this LOAD (whole seconds, at most
+   * [T.MAX_LIVE_BASE_S]) is its place "at live". Only the time behind that counts, on the phone and here alike. The
+   * base is taken from the very `state` values the phone gets, so both subtract the same number.
+   */
+  function shownBehind(b) {
+    if (b === null || b === undefined || !isFinite(b)) return b;
+    return Math.max(0, Math.round(b) - (S.liveBase || 0));
+  }
   /** R-8, R-64: "At live", "12 s behind live", or plain "Live" when nothing says how far behind (never guessed). */
   function behindLiveText(b) {
+    b = shownBehind(b);
     if (b === null || b === undefined || !isFinite(b)) return 'Live';
     return b < T.AT_LIVE_S ? 'At live' : Math.round(b) + ' s behind live';
   }
@@ -231,6 +247,10 @@
   /** `state` every 5 s and whenever something but the clock changed. */
   function sendState(force) {
     var f = stateFields();
+    if (S.live && f.playing && typeof f.behindLiveS === 'number') {
+      var r = Math.round(f.behindLiveS);
+      S.liveBase = Math.min(S.liveBase === null ? r : S.liveBase, r, T.MAX_LIVE_BASE_S);
+    }
     var key = [f.itemId, f.playing, f.buffering, f.snapTransport, f.hidden].join('|');
     if (!force && key === S.lastStateKey) return;
     S.lastStateKey = key;
@@ -426,21 +446,22 @@
       var l = clamp(c.l, 0, 1), t = clamp(c.t, 0, 1), r = clamp(c.r, 0, 1), b = clamp(c.b, 0, 1);
       if (r - l < 0.05) { l = 0; r = 1; }
       if (b - t < 0.05) { t = 0; b = 1; }
-      return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color };
+      return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color, note: s.note ? M.cap(s.note) : '' };
     });
     var before = S.tiles ? S.tiles.slots : [];
     S.tiles = { layout: layout, slots: slots, focused: clamp(m.focused, 0, Math.max(0, slots.length - 1)), audio: m.audio, mode: m.mode };
     var key = layout + '|' + slots.length + '|' + m.mode;
     var rebuilt = key !== S.tileKey;
-    // C-B5: a tile that now shows another video (or none) never keeps the old one's picture or snapshot address.
-    if (!rebuilt) slots.forEach(function (sl, i) {
+    // C-B5: a tile that now shows another video (or none) never keeps the old one's picture or snapshot address. M1: a
+    // tile that keeps its video keeps its address through a new layout too (it used to go blank when a third was added).
+    slots.forEach(function (sl, i) {
       var old = before[i];
-      if (!old || old.itemId === sl.itemId) return;
+      if (old && old.itemId === sl.itemId) return;
       delete S.snapUrls[i];
-      var t = tileEls[i];
-      if (t) t.imgs.forEach(function (img) { cls(img, 'on', false); img.removeAttribute('src'); });
+      var t = !rebuilt && tileEls[i];
+      if (t) { t.imgs.forEach(function (img) { cls(img, 'on', false); img.removeAttribute('src'); }); t.since = now(); }
     });
-    else S.snapUrls = {};
+    Object.keys(S.snapUrls).forEach(function (k) { if (!(Number(k) < slots.length)) delete S.snapUrls[k]; });
     S.tileKey = key;
     buildTiles(rebuilt);
     restartSnapTimers();
@@ -525,9 +546,11 @@
         status.appendChild(el('span', 'st-time mono'));
         b.appendChild(status);
         b.appendChild(el('span', 'fps'));
+        // M1, m11: what a tile without a picture is doing, in plain words ("Loading…", the phone's note, "Add a video").
+        b.appendChild(el('span', 'hint'));
         b.appendChild(el('span', 'ring'));
         b.addEventListener('click', function () { if (!S.touch) return; chooseTile(i); });
-        var t = { btn: b, frames: frames, imgs: [a, c], front: 0, info: info, status: status, name: b.querySelector('.name'), fps: b.querySelector('.fps'), loading: false, nat: null };
+        var t = { btn: b, frames: frames, imgs: [a, c], front: 0, info: info, status: status, name: b.querySelector('.name'), fps: b.querySelector('.fps'), hint: b.querySelector('.hint'), loading: false, nat: null, since: now() };
         [a, c].forEach(function (img, k) {
           img.addEventListener('load', function () { onFrameLoaded(t, k); });
           img.addEventListener('error', function () { onFrameFailed(t, k); });
@@ -590,9 +613,20 @@
       show(t.name, !showInfo && !!title);
       setText(t.name, title);
       var snap = mode === 'focus' && !t.isVideo && !!(slot.itemId || slot.color);
-      show(t.fps, snap);
+      // m11: the refresh rate is a diagnostic (?debug=1), not something to read on a TV.
+      show(t.fps, snap && DEBUG);
       setText(t.fps, fps + ' fps');
       show(t.frames, snap);
+      var pictured = t.imgs.some(function (img) { return img.classList.contains('on'); });
+      var hint = '';
+      if (mode === 'focus' && !t.isVideo) {
+        if (!slot.itemId && !slot.color) hint = 'Add a video from your phone';
+        else if (slot.note) hint = slot.note;
+        else if (slot.itemId && !pictured) hint = 'Loading…';
+      }
+      setText(t.hint, hint);
+      show(t.hint, !!hint);
+      cls(t.hint, 'quiet', !slot.itemId);
     });
     cls(body, 'ov-hidden', now() > S.overlayUntil && mode === 'focus' && !S.fake);
   }
@@ -775,6 +809,14 @@
     cls(body, 'fresh', true); // C-B5/C-B16: the last frame of what played before never shows as this one's first
     S.pendingId = id;
     var live = media.streamType === 'LIVE';
+    // m7: a live stream starts at the live edge (the player's own offset), never at a start time: an older phone's
+    // `currentTime: 0` meant the start of the relay's whole window (26-34 s behind, minutes after Back to live).
+    if (live) delete req.currentTime;
+    S.liveBase = null;
+    // M2: the stall watch belongs to the new LOAD at once: a live stream's (it seeks to the live edge after 10 s stuck)
+    // used to carry over while a video loaded at its place and threw it to its end.
+    S.live = live;
+    S.stall = { lastT: -1, stuckMs: 0 };
     var ctype = String(media.contentType || '');
     var isHls = /mpegurl/i.test(ctype) || /\.m3u8(\?|#|$)/i.test(url);
     var isDash = /dash/i.test(ctype) || /\.mpd(\?|#|$)/i.test(url);
@@ -1167,7 +1209,7 @@
       var r = pRange(), b = behindLive();
       frac = S.fake && S.fake.frac !== undefined ? S.fake.frac : (r ? clamp((pos - r.start) / (r.end - r.start), 0, 1) : 1);
       // m2: "At live" puts the knob at the right end, never part way along the window.
-      if (b !== null && b !== undefined && isFinite(b) && b < T.AT_LIVE_S) frac = 1;
+      if (b !== null && b !== undefined && isFinite(b) && shownBehind(b) < T.AT_LIVE_S) frac = 1;
       setText($('hubBehind'), behindLiveText(b));
     } else {
       frac = dur > 0 ? clamp(pos / dur, 0, 1) : 0;

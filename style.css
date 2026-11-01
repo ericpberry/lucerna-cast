@@ -58,7 +58,9 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .t-title { font-family: var(--display); font-weight: 700; font-size: calc(32px * var(--scale)); line-height: calc(36px * var(--scale)); }
 .t-sub { font-size: calc(18px * var(--scale)); color: var(--tertiary); }
 .c-title { font-family: var(--display); font-weight: 700; font-size: calc(26px * var(--scale)); }
-.corner-title { position: absolute; left: 48px; bottom: 40px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.corner-title { position: absolute; left: 48px; bottom: 40px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; max-width: calc(100% - 96px - 140px); }
+/* Polish: a long title ends in an ellipsis before the quality badge at the right (it used to run under it). */
+.corner-title .c-title { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .corner-meta { position: absolute; right: 48px; bottom: 44px; font: 500 calc(18px * var(--scale)) var(--mono); color: var(--quiet-mono); }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; font: 600 calc(18px * var(--scale)) var(--body); transition: transform 0.15s ease, box-shadow 0.15s ease; }
 .btn.primary { background: var(--lamp); color: var(--on-lamp); }
@@ -103,6 +105,9 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 /* The frame-rate chip sits bottom-right (R-53: at 18px it no longer fits beside the title). */
 .tile .fps { position: absolute; right: var(--sr, 8px); bottom: var(--sb, 8px); font: 500 calc(18px * var(--scale)) var(--mono); color: var(--tertiary); background: rgba(0, 0, 0, 0.75); padding: 2px 8px; border-radius: 6px; }
 .tile .shade { display: none; }
+/* M1, m11: a tile without a picture says what it is doing; an empty slot is a quiet hint, not a black box. */
+.tile .hint { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: calc(100% - 32px); text-align: center; font: 500 calc(20px * var(--scale)) var(--body); color: var(--tertiary); }
+.tile .hint.quiet { color: var(--secondary); }
 .tile .info { position: absolute; left: var(--sl, 16px); top: var(--st, 14px); max-width: calc(100% - var(--sl, 16px) - var(--sr, 16px)); display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 8px 16px; border-radius: 16px; background: rgba(0, 0, 0, 0.75); }
 .tile .info .t-title { font-size: calc(22px * var(--scale)); line-height: calc(26px * var(--scale)); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile .info .t-sub { font-size: calc(18px * var(--scale)); }
