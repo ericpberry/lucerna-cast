@@ -22,7 +22,14 @@
   var T = {
     HEARTBEAT_MS: 5000, PHONE_LOST_MS: 15000, STATE_MS: 5000, FINISH_HOLD_MS: 2000, KEY_THROTTLE_MS: 700,
     STARTING_TIMEOUT_MS: 30000, STALL_RECOVER_MS: 10000, OVERLAY_MS: 6000, HUB_HIDE_MS: 5000, BUFFER_SHOW_MS: 400,
-    UP_NEXT_S: 15, SNAP_FAILS: 2, SNIFF_MS: 2500
+    UP_NEXT_S: 15, SNAP_FAILS: 2, SNIFF_MS: 2500,
+    // R-67: End, Paused and PhoneLost give way to the idle screen after 5 min (a shared TV is a public screen, and
+    // a still board is a burn-in risk). PhoneLost waits out the whole window first: it is still reconnecting.
+    REST_MS: 300000,
+    // R-89: after a minute of "Trying for", the board says what to do on the phone.
+    LOST_HELP_MS: 60000,
+    // R-8, R-64: the same "behind live" words on every TV surface (tv/…/ui/ControlsScreen.kt mirrors this).
+    AT_LIVE_S: 1.5
   };
 
   // ---- state ------------------------------------------------------------------------------------------------------------
@@ -70,6 +77,8 @@
     tvName: '',
     lastKeyAt: 0,
     upNextShownFor: null,
+    pausedSince: 0,         // R-67: when the current pause began (0 = not paused)
+    endSince: 0,            // R-67: when the end-of-queue board appeared
     fake: null              // preview: the pretend player
   };
 
@@ -91,7 +100,6 @@
     if (h > 0 || hours) return h + ':' + pad2(m) + ':' + pad2(s);
     return m + ':' + pad2(s);
   }
-  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
   function isPrivateHost(url) {
     try {
       var h = new URL(url, location.href).hostname;
@@ -165,7 +173,17 @@
     }
     return S.status.behindLiveS;
   }
-  function videoHeight() { return S.fake ? (S.fake.height || 0) : (video.videoHeight || 0); }
+  /** R-8, R-64: "At live", "12 s behind live", or plain "Live" when nothing says how far behind (never guessed). */
+  function behindLiveText(b) {
+    if (b === null || b === undefined || !isFinite(b)) return 'Live';
+    return b < T.AT_LIVE_S ? 'At live' : Math.round(b) + ' s behind live';
+  }
+  /** The picture's quality as people name it: its shorter side (a vertical 720 x 1280 clip is 720p, m10). */
+  function videoHeight() {
+    if (S.fake) return S.fake.height || 0;
+    var w = video.videoWidth || 0, h = video.videoHeight || 0;
+    return w > 0 && h > 0 ? Math.min(w, h) : h;
+  }
   function currentItem() { return S.playingId ? S.items[S.playingId] || null : null; }
   function curTitle() {
     if (S.hello.discreet) return '';
@@ -207,7 +225,7 @@
     return {
       itemId: S.playingId, positionMs: Math.max(0, Math.round(pTime() * 1000)), playing: st === 'PLAYING',
       buffering: st === 'BUFFERING' || S.loading, behindLiveS: b === null || b === undefined ? null : Math.round(b * 10) / 10,
-      snapTransport: S.snapTransport, hidden: S.hidden
+      snapTransport: S.snapTransport, hidden: S.hidden, videoHeight: videoHeight() || null
     };
   }
   /** `state` every 5 s and whenever something but the clock changed. */
@@ -328,11 +346,16 @@
     cls(body, 'discreet', !!m.discreet);
     cls(body, 'sub-plain', !m.subtitleBackground);
     S.updateV = m.v > M.VERSION ? m.v : 0;
+    // R-94: the phone knows what this TV is called (Cast doesn't tell a receiver page its own name).
+    S.tvName = typeof m.tvName === 'string' ? M.cap(m.tvName) : S.tvName;
     var t = m.snapshot.transport;
     if (t === 'channel') setSnapTransport('channel');
     else if (t === 'http') setSnapTransport('http');
     else if (S.snapFails < T.SNAP_FAILS) setSnapTransport('http');
     sendCaps();
+    // C-B1: a phone that (re)joins while this page shows a failure hears about it again (the first word may have been
+    // lost with the old connection, e.g. a Wi-Fi drop).
+    if (S.screen === 'cantplay' && S.lastError) send('error', S.lastError);
     restartSnapTimers();
   }
 
@@ -357,6 +380,7 @@
     var it = currentItem();
     S.end = { played: m.played, title: it ? it.title : curTitle(), site: it ? it.site : curSite(), durationMs: it ? it.durationMs : null, thumb: it ? it.thumb : null, live: S.live };
     S.starting = null;
+    S.endSince = now();
     setScreen('end');
     render();
     focusFirst([$('endAgain')]);
@@ -366,7 +390,36 @@
   var LAYOUTS = ['two', 'three', 'four', 'onePlusThree'];
   var TILE_COUNT = { two: 2, three: 3, four: 4, onePlusThree: 4 };
 
+  /** C-B4/C-B5: no tiles at all: the grid, its pictures and snapshot addresses go, the video fills the screen again. */
+  function resetTiles() {
+    S.tiles = null;
+    S.tileKey = '';
+    S.snapUrls = {};
+    snapTimers.forEach(function (id) { clearInterval(id); });
+    snapTimers = [];
+    tileEls = [];
+    $('tiles').textContent = '';
+    placeVideo();
+  }
+
+  /**
+   * C-B5: everything the last cast left on the TV goes (titles, tiles, end board, picture): the next cast starts on a
+   * clean page. On Stop from the phone, and when the phone ends its session on purpose.
+   */
+  function resetAll() {
+    resetTiles();
+    S.items = {}; S.itemOrder = []; S.playingId = null; S.pendingId = null; S.queue = [];
+    S.media = null; S.end = null; S.cant = null; S.starting = null; S.live = false; S.loading = false;
+    S.endedFor = null; S.lostSince = 0; S.pausedSince = 0; S.endSince = 0; S.liveIdle = false; S.upNextShownFor = null;
+    clearTimeout(S.finishTimer);
+    cls(body, 'fresh', true); // no last frame of the old video, ever
+    setScreen('idle');
+    render();
+  }
+
   function onTiles(m) {
+    var filled = m.slots.filter(function (s) { return s && s.itemId; }).length;
+    if (m.mode === 'single' || filled < 2 && m.mode !== 'phoneCombines') { if (S.tiles) { resetTiles(); render(); } return; }
     var layout = LAYOUTS.indexOf(m.layout) >= 0 ? m.layout : 'two';
     var slots = m.slots.slice(0, TILE_COUNT[layout]).map(function (s, i) {
       var c = s.crop;
@@ -375,9 +428,19 @@
       if (b - t < 0.05) { t = 0; b = 1; }
       return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color };
     });
+    var before = S.tiles ? S.tiles.slots : [];
     S.tiles = { layout: layout, slots: slots, focused: clamp(m.focused, 0, Math.max(0, slots.length - 1)), audio: m.audio, mode: m.mode };
     var key = layout + '|' + slots.length + '|' + m.mode;
     var rebuilt = key !== S.tileKey;
+    // C-B5: a tile that now shows another video (or none) never keeps the old one's picture or snapshot address.
+    if (!rebuilt) slots.forEach(function (sl, i) {
+      var old = before[i];
+      if (!old || old.itemId === sl.itemId) return;
+      delete S.snapUrls[i];
+      var t = tileEls[i];
+      if (t) t.imgs.forEach(function (img) { cls(img, 'on', false); img.removeAttribute('src'); });
+    });
+    else S.snapUrls = {};
     S.tileKey = key;
     buildTiles(rebuilt);
     restartSnapTimers();
@@ -594,7 +657,7 @@
     if (PREVIEW || S.snapTransport !== 'http' || tilesMode() !== 'focus') return;
     var every = Math.round(1000 / clamp(S.hello.snapshot.fps, 1, 15));
     tileEls.forEach(function (t, i) {
-      if (t.isVideo) return;
+      if (t.isVideo || !(t.slot && t.slot.itemId)) return;
       snapTimers.push(setInterval(function () { pullSnap(t, i); }, every));
       pullSnap(t, i);
     });
@@ -707,8 +770,9 @@
     var id = typeof cd.itemId === 'string' ? cd.itemId.slice(0, 200) : null;
     var Msgs = cast.framework.messages;
     S.starting = null; clearTimeout(startTimer);
-    S.end = null; S.cant = null; S.liveIdle = false;
+    S.end = null; S.cant = null; S.liveIdle = false; S.lastError = null;
     S.loading = true;
+    cls(body, 'fresh', true); // C-B5/C-B16: the last frame of what played before never shows as this one's first
     S.pendingId = id;
     var live = media.streamType === 'LIVE';
     var ctype = String(media.contentType || '');
@@ -820,15 +884,21 @@
     if (key === S.errorKey && now() - S.errorAt < 3000) return;
     S.errorKey = key; S.errorAt = now();
     if (c.code === 'format' || c.code === 'decode') cantPlay(id, c.code, c.detail, null);
-    else { send('error', { itemId: id, code: c.code, detail: c.detail }); if (S.live) S.liveIdle = true; }
+    else if (id && id !== S.playingId || !S.live) {
+      // C-B1 (TV side): a video that didn't load says so with its own title; the last video's board never stays up.
+      S.playingId = id || S.playingId;
+      cantPlay(id, c.code, c.detail, null, c.code === 'forbidden' ? 'The link for this video expired' : 'This video didn\'t load',
+        'Try again or choose another way on your phone.');
+    } else { send('error', { itemId: id, code: c.code, detail: c.detail }); S.liveIdle = true; }
     render();
   }
-  function cantPlay(id, code, detail, fam) {
-    send('error', { itemId: id, code: code, detail: detail || '' });
+  function cantPlay(id, code, detail, fam, head, sub) {
+    S.lastError = { itemId: id, code: code, detail: detail || '' };
+    send('error', S.lastError);
     var it = id ? S.items[id] : null;
     var md = S.media && S.media.metadata;
     var title = S.hello.discreet ? '' : (it && it.title) || (md && md.title ? M.cap(md.title) : '');
-    S.cant = { title: title, detail: [fam, playsLine()].filter(Boolean).join(' · ') };
+    S.cant = { title: title, detail: head ? '' : [fam, playsLine()].filter(Boolean).join(' · '), head: head || null, sub: sub || null };
     setScreen('cantplay');
     render();
   }
@@ -938,9 +1008,12 @@
     var discreet = !!S.hello.discreet;
     var mode = tilesMode();
 
+    // R-67: the end-of-queue board goes back to idle for good after REST_MS (the phone offers what's next).
+    if (S.screen === 'end' && S.endSince && t - S.endSince >= T.REST_MS && !S.starting) {
+      S.end = null; S.endSince = 0; setScreen('idle'); playing = false;
+    }
+
     cls(body, 'tiles-on', playing && !!mode);
-    show($('idle'), S.screen === 'idle' && !S.updateV);
-    setText($('idleTv'), S.tvName);
 
     // buffering (after a short delay, so a quick hiccup doesn't flash)
     var buffering = playing && (st === 'BUFFERING' || S.loading);
@@ -949,7 +1022,21 @@
     var showBuffering = buffering && (S.fake || t - S.bufferingSince >= T.BUFFER_SHOW_MS) && !mode;
     var paused = playing && st === 'PAUSED' && !buffering;
     var lost = playing && !!S.lostSince;
-    var un = playing && !showBuffering && !paused && !lost ? upNextInfo() : null;
+    var lostForMs = S.fake && S.fake.lostFor !== undefined ? S.fake.lostFor * 1000 : (lost ? t - S.lostSince : 0);
+    if (paused && !S.pausedSince) S.pausedSince = t;
+    if (!paused) S.pausedSince = 0;
+    var reconnecting = playing && !lost && !S.starting && (S.status.relayState === 'refreshing' || S.status.relayState === 'lost' || S.liveIdle);
+    // R-67: Paused (unless the stream is reconnecting) and PhoneLost (once its reconnect window is over, and only
+    // while nothing plays) give way to the idle screen; play, or the phone coming back, brings the video back.
+    var resting = playing && !S.starting && (
+      (paused && !reconnecting && t - S.pausedSince >= T.REST_MS) ||
+      (lost && lostForMs >= T.REST_MS && st !== 'PLAYING'));
+    cls(body, 'resting', resting);
+    show($('idle'), (S.screen === 'idle' || resting) && !S.updateV);
+    setText($('idleTv'), S.tvName);
+    cls($('idleFoot'), 'solo', !S.tvName);
+    // R-66: the Up next card never stacks with the reconnecting banner; the banner goes first.
+    var un = playing && !showBuffering && !paused && !lost && !reconnecting ? upNextInfo() : null;
 
     // title overlay (single video)
     var ovOn = playing && !mode && !showBuffering && !paused && !un && !lost && (t < S.overlayUntil || !!(S.fake && S.fake.overlay));
@@ -958,7 +1045,7 @@
     setText($('ovTitle'), title);
     var subParts = [];
     if (site) subParts.push(site);
-    if (it && it.count > 1) subParts.push(it.index + ' of ' + it.count);
+    if (it && it.count > it.index) subParts.push((it.count - it.index) + ' up next'); // C-B13: one count everywhere
     setText($('ovSub'), subParts.join(' · '));
 
     // discreet pill (TvDiscreet)
@@ -972,15 +1059,14 @@
 
     // buffering
     show($('buffering'), showBuffering && !S.starting);
-    setText($('bufHead'), live ? 'Catching up to live' : 'Loading');
+    setText($('bufHead'), live ? 'Catching up to live' : 'Loading…');
     show($('bufLive'), live);
     setText($('bufTitle'), title);
     var url = S.media ? (S.media.contentUrl || S.media.contentId || '') : '';
-    var metaParts = [];
-    if (S.fake ? S.fake.relay : isPrivateHost(url)) metaParts.push('via phone relay');
+    // R-75: plain words, no pipeline ("via phone relay" is gone): say where the video comes from, if it's the phone.
+    setText($('bufSub'), (S.fake ? S.fake.relay : isPrivateHost(url)) ? 'Getting the video from your phone' : 'This takes a few seconds');
     var vh = videoHeight();
-    if (vh) metaParts.push(vh + 'p');
-    setText($('bufMeta'), metaParts.join(' · '));
+    setText($('bufMeta'), vh ? vh + 'p' : '');
 
     // paused (TvPaused)
     show($('paused'), paused && !S.starting && !lost);
@@ -989,7 +1075,7 @@
     setText($('pauseSub'), [site, fromPhone ? 'paused from your phone' : 'paused'].filter(Boolean).join(' · '));
     if (live) {
       var b = behindLive();
-      setText($('pauseTime'), b === null || b === undefined ? 'LIVE' : Math.round(b) + ' s behind live');
+      setText($('pauseTime'), behindLiveText(b));
       $('pauseFill').style.width = '100%';
     } else {
       var hours = dur >= 3600;
@@ -1015,19 +1101,26 @@
     cls($('unCard'), 'focus', document.activeElement === $('unPlay'));
 
     // reconnecting banner
-    show($('banner'), playing && !lost && !S.starting && (S.status.relayState === 'refreshing' || S.status.relayState === 'lost' || S.liveIdle));
+    show($('banner'), reconnecting);
 
-    // phone lost (TvPhoneLost)
+    // phone lost (TvPhoneLost). R-89: "Trying for 0:24" counts up; after a minute, what to do on the phone.
     show($('phonelost'), lost && !S.starting);
     setText($('lostKept'), title ? 'Your place is kept · ' + title : 'Your place is kept');
-    setText($('lostTimer'), 'trying again · ' + fmt(S.fake && S.fake.lostFor !== undefined ? S.fake.lostFor : (t - S.lostSince) / 1000));
+    setText($('lostTimer'), 'Trying for ' + fmt(lostForMs / 1000));
+    setText($('lostHelp'), lostForMs >= T.LOST_HELP_MS
+      ? 'Open Lucerna on your phone to pick up again. It needs the same Wi-Fi as this TV.'
+      : 'Keep Lucerna open on the same Wi-Fi. It picks up again by itself.');
 
-    // starting
+    // starting (R-90: one ellipsis on the screen at most; the title has none)
     show($('starting'), !!S.starting);
-    if (S.starting) setText($('startTitle'), S.starting.title ? 'Starting ' + S.starting.title + '…' : 'Starting…');
+    if (S.starting) setText($('startTitle'), S.starting.title ? 'Starting ' + S.starting.title : 'Starting…');
 
     // can't play / update
     show($('cantplay'), S.screen === 'cantplay' && !S.updateV);
+    if (S.cant) {
+      setText($('cpHead'), S.cant.head || 'This TV can\'t play this video\'s format');
+      setText($('cpSub'), S.cant.sub || 'Lucerna can play it on your phone instead. Choose on your phone.');
+    }
     if (S.cant) { setText($('cpTitle'), S.cant.title); show($('cpTitle'), !!S.cant.title); setText($('cpDetail'), S.cant.detail); show($('cpDetail'), !!S.cant.detail); }
     setText($('cpTv'), S.tvName);
     show($('update'), !!S.updateV);
@@ -1045,7 +1138,8 @@
       show($('endCard'), !!(S.end.title || em.length) && !discreet);
       var img = $('endThumb').querySelector('img');
       if (S.end.thumb && !discreet) { if (img.getAttribute('src') !== S.end.thumb) img.src = S.end.thumb; img.hidden = false; } else img.hidden = true;
-      setText($('endFoot'), [S.tvName, plural(S.end.played, 'video', 'videos') + ' played'].filter(Boolean).join(' · '));
+      // R-67: no "5 videos played" on a shared screen; just which TV this is.
+      setText($('endFoot'), S.tvName);
     }
 
     // touch display (TvHub)
@@ -1072,7 +1166,9 @@
     if (live) {
       var r = pRange(), b = behindLive();
       frac = S.fake && S.fake.frac !== undefined ? S.fake.frac : (r ? clamp((pos - r.start) / (r.end - r.start), 0, 1) : 1);
-      setText($('hubBehind'), b === null || b === undefined || b < 1.5 ? 'At live' : Math.round(b) + ' s behind');
+      // m2: "At live" puts the knob at the right end, never part way along the window.
+      if (b !== null && b !== undefined && isFinite(b) && b < T.AT_LIVE_S) frac = 1;
+      setText($('hubBehind'), behindLiveText(b));
     } else {
       frac = dur > 0 ? clamp(pos / dur, 0, 1) : 0;
       var hrs = dur >= 3600;
@@ -1081,7 +1177,7 @@
     show($('hubJump'), live);
     $('hubFill').style.width = (frac * 100).toFixed(2) + '%';
     $('hubKnob').style.left = (frac * 100).toFixed(2) + '%';
-    setText($('hubCount'), it && it.count > 1 ? it.index + ' of ' + it.count : (S.fake && S.fake.count) || '');
+    setText($('hubCount'), it && it.count > it.index ? (it.count - it.index) + ' up next' : (S.fake && S.fake.count) || '');
   }
 
   // ---- input: TV remote keys (R6) -------------------------------------------------------------------------------------------
@@ -1252,7 +1348,7 @@
     context.addCustomMessageListener(NS, onCustomMessage);
     player.setMessageInterceptor(Msg.MessageType.LOAD, onLoadRequest);
     player.setMessageInterceptor(Msg.MessageType.PAUSE, function (req) { S.pausedLocally = false; return req; });
-    player.setMessageInterceptor(Msg.MessageType.STOP, function (req) { S.end = null; setScreen('idle'); render(); return req; });
+    player.setMessageInterceptor(Msg.MessageType.STOP, function (req) { resetAll(); return req; });
     if (player.setMediaPlaybackInfoHandler) player.setMediaPlaybackInfoHandler(function (loadRequest, cfg) { return lastCfg || cfg; });
 
     player.addEventListener(Ev.PLAYER_LOAD_COMPLETE, onLoadComplete);
@@ -1261,12 +1357,12 @@
     player.addEventListener(Ev.MEDIA_STATUS, function (e) {
       var ms = e && e.mediaStatus;
       if (ms && ms.playerState === 'IDLE' && ms.idleReason) onMaybeFinished(ms.idleReason);
-      if (ms && ms.playerState === 'PLAYING') { S.liveIdle = false; S.loading = false; }
+      if (ms && ms.playerState === 'PLAYING') { S.liveIdle = false; S.loading = false; cls(body, 'fresh', false); }
       render();
     });
     [Ev.PLAYING, Ev.PAUSE, Ev.BUFFERING, Ev.SEEKED].forEach(function (ev) {
       player.addEventListener(ev, function () {
-        if (ev === Ev.PLAYING) { S.liveIdle = false; S.loading = false; S.overlayUntil = Math.max(S.overlayUntil, now() + 2500); }
+        if (ev === Ev.PLAYING) { S.liveIdle = false; S.loading = false; cls(body, 'fresh', false); S.overlayUntil = Math.max(S.overlayUntil, now() + 2500); }
         render();
         sendState(false);
       });
@@ -1275,7 +1371,7 @@
     var Sys = cast.framework.system.EventType;
     context.addEventListener(Sys.READY, function () { setTouch(touchFromCapabilities()); render(); });
     context.addEventListener(Sys.SENDER_DISCONNECTED, function (e) {
-      if (e && e.senderId === S.phone && e.reason !== 'requested_by_sender' && S.screen === 'play' && !S.lostSince) { S.lostSince = now(); render(); }
+      if (e && e.senderId === S.phone && e.reason !== 'requested_by_sender' && e.reason !== 'closed' && S.screen === 'play' && !S.lostSince) { S.lostSince = now(); render(); }
     });
     if (Sys.VISIBILITY_CHANGED) context.addEventListener(Sys.VISIBILITY_CHANGED, function (e) { if (e && typeof e.isVisible === 'boolean') setHidden(!e.isVisible); });
 
@@ -1353,8 +1449,7 @@
         item('q:council', 'Council budget hearing', 'councilmeetings.example', false, 8040000, { next: { title: 'The Long Coast, episode 5', startsInS: 15 } });
         S.queue = [{ id: 'q:coast5', title: 'The Long Coast, episode 5', live: false, durationMs: 3150000, site: 'longcoast.example' }, { id: 'q:harbor', title: 'Harbor webcam', live: true, durationMs: null }];
         S.fake.time = 8028; S.fake.duration = 8040;
-        S.status = { type: 'status', seq: 0, paused: false, relayState: 'refreshing', behindLiveS: null };
-        bg = '#263A4A'; setScreen('play'); break;
+        bg = '#263A4A'; setScreen('play'); break;   // R-66: never with the reconnecting banner
       case 'reconnecting':
         item('q:mile20', 'Mile 20 camera', 'runnerstv.example', true);
         S.fake.overlay = false;
@@ -1363,7 +1458,7 @@
       case 'end':
         S.tvName = 'Living Room TV';
         S.end = { played: 5, title: 'The Long Coast, episode 5', site: 'longcoast.example', durationMs: 3150000, thumb: null, live: false };
-        setScreen('end'); break;
+        S.endSince = now(); setScreen('end'); break;
       case 'discreet':
         S.hello.discreet = true; cls(body, 'discreet', true);
         item('q:x', '', '', false, 3150000);

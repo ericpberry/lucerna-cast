@@ -43,7 +43,7 @@
         <img class="wordmark" src="lucerna-wordmark-dark.svg" alt="lucerna">
       </div>
       <p class="hint">Ready to play from Lucerna on your phone</p>
-      <div class="foot"><span id="idleTv"></span><span>Nothing is shown here until you press play</span></div>
+      <div class="foot" id="idleFoot"><span id="idleTv"></span><span>Nothing is shown here until you press play</span></div>
     </section>
 
     <!-- Tiles: Focus + motion snapshots (TvFocus), and Phone combines chrome (R4, R5) -->
@@ -72,7 +72,7 @@
       <div class="center">
         <span class="spin big"></span>
         <span class="b-head" id="bufHead">Catching up to live</span>
-        <span class="b-sub">Loading the stream from your phone. This takes a few seconds.</span>
+        <span class="b-sub" id="bufSub">Getting the video from your phone</span>
       </div>
       <div class="corner-title">
         <span class="live-label scrim" id="bufLive"><i></i>LIVE</span>
@@ -124,10 +124,10 @@
       <div class="center">
         <span class="spin big"></span>
         <span class="h">Lost contact with your phone</span>
-        <span class="p">Keep Lucerna open on the same Wi-Fi. It picks up again by itself.</span>
+        <span class="p" id="lostHelp">Keep Lucerna open on the same Wi-Fi. It picks up again by itself.</span>
         <span class="kept" id="lostKept">Your place is kept</span>
       </div>
-      <span class="corner-meta" id="lostTimer">trying again · 0:00</span>
+      <span class="corner-meta" id="lostTimer">Trying for 0:00</span>
     </section>
 
     <!-- "Starting <title>…" (Spool D-115) -->
@@ -136,17 +136,18 @@
       <div class="center">
         <span class="spin big"></span>
         <span class="h" id="startTitle">Starting…</span>
-        <span class="p">Connecting to the stream…</span>
+        <span class="p">Getting the video from your phone</span>
       </div>
     </section>
 
-    <!-- TvCantPlay, and the same layout for "Update Lucerna on your phone" -->
+    <!-- TvCantPlay, and the same layout for "Update Lucerna on your phone". Errors are Ink on Raised with an outline
+         icon in Secondary (P-10, R-74): amber is only for the one primary action. -->
     <section id="cantplay" class="screen message" hidden>
       <div class="msg">
-        <span class="icon-tile"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"></path><path d="M3 12a8 8 0 0 1 8 8"></path><path d="M3 16a4 4 0 0 1 4 4"></path></svg></span>
-        <span class="h">This TV can't play this video's format</span>
-        <span class="p">Lucerna can play it on your phone instead. Choose on your phone.</span>
-        <div class="detail"><span id="cpTitle"></span><span id="cpDetail"></span></div>
+        <span class="icon-tile"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.2L2.6 17.6a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z"></path><path d="M12 9.5v4"></path><path d="M12 17h.01"></path></svg></span>
+        <span class="h" id="cpHead">This TV can't play this video's format</span>
+        <span class="p" id="cpSub">Lucerna can play it on your phone instead. Choose on your phone.</span>
+        <div class="detail"><span class="d-title" id="cpTitle"></span><span id="cpDetail"></span></div>
       </div>
       <span class="foot-left" id="cpTv"></span>
     </section>
@@ -169,7 +170,7 @@
         <span class="p">Add more from your phone, or play something again.</span>
         <div class="buttons">
           <button class="btn big primary" id="endAgain" type="button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg>Play again</button>
-          <button class="btn big quiet" id="endStart" type="button">Back to the start</button>
+          <button class="btn big quiet" id="endStart" type="button">Done</button>
         </div>
       </div>
       <div class="card last" id="endCard">

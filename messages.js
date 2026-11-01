@@ -35,7 +35,7 @@
   var T = {};
   T.hello = [['seq', 'long', 0], ['v', 'int', VERSION], ['app', 'string', ''], ['discreet', 'bool', false], ['textScale', 'float', 1],
     ['reducedMotion', 'bool', false], ['liveOffsetS', 'int', 6], ['snapshot', 'obj:SnapshotConfig', 'new'],
-    ['subtitleScale', 'float', 1], ['subtitleBackground', 'bool', true]];
+    ['subtitleScale', 'float', 1], ['subtitleBackground', 'bool', true], ['tvName', 'string?', null]];
   T.item = [['seq', 'long', 0], ['id', 'string', ''], ['title', 'string', ''], ['site', 'string', ''], ['live', 'bool', false],
     ['durationMs', 'long?', null], ['thumb', 'string?', null], ['next', 'obj:NextUp?', null], ['index', 'int', 1], ['count', 'int', 1],
     ['subtitleOffsetMs', 'long', 0]];
@@ -49,7 +49,8 @@
   T.caps = [['seq', 'long', 0], ['video', 'list:string', 'new'], ['maxHeight', 'int', 1080], ['touch', 'bool', false],
     ['kind', 'string', 'web'], ['maxTiles', 'int', 1], ['v', 'int', VERSION]];
   T.state = [['seq', 'long', 0], ['itemId', 'string?', null], ['positionMs', 'long', 0], ['playing', 'bool', false],
-    ['buffering', 'bool', false], ['behindLiveS', 'float?', null], ['snapTransport', 'string?', null], ['hidden', 'bool', false]];
+    ['buffering', 'bool', false], ['behindLiveS', 'float?', null], ['snapTransport', 'string?', null], ['hidden', 'bool', false],
+    ['videoHeight', 'int?', null]];
   T.error = [['seq', 'long', 0], ['itemId', 'string?', null], ['code', 'string', 'network'], ['detail', 'string', '']];
   T.want = [['seq', 'long', 0], ['itemId', 'string', '']];
   T.ended = [['seq', 'long', 0], ['itemId', 'string', '']];

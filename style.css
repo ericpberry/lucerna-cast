@@ -2,7 +2,8 @@
    Chrome lives on a fixed-size stage scaled to the screen (Bobbin's fit()); the video stays full-bleed under it.
    Old-firmware rules (R8, Spool D-134/D-135): no :has(), touch selectors always scoped (body.touch-ui nav.hub),
    never a bare .touch class. Text sizes follow the phone's TV text size (--scale, C8); body.still (reduced motion)
-   turns every transition and animation off. */
+   turns every transition and animation off. No text is smaller than 18px at 960 x 540 (times --scale) so it reads
+   across a room (R-53; receiver/test/states.spec.js checks every state). */
 @font-face { font-family: "Bricolage Grotesque"; src: url("fonts/bricolage_grotesque.woff2") format("woff2"); font-weight: 200 800; font-stretch: 75% 100%; }
 @font-face { font-family: "Instrument Sans"; src: url("fonts/instrument_sans.woff2") format("woff2"); font-weight: 400 700; font-stretch: 75% 100%; }
 @font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibm_plex_mono_regular.woff2") format("woff2"); font-weight: 400; }
@@ -32,6 +33,8 @@ button:focus { outline: none; }
 #vwrap { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
 #media, #fakevideo { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; object-fit: contain; background: transparent; }
 body.screen-idle #vwrap, body.screen-end #vwrap, body.screen-cantplay #vwrap, body.screen-update #vwrap { visibility: hidden; }
+/* C-B5 / C-B16: from a new LOAD (or Stop) until the new video plays, the old video's last frame never shows. */
+body.fresh #vwrap { visibility: hidden; }
 video::cue { font-family: var(--body); font-size: calc(30px * var(--sub-scale)); color: #fff; background: rgba(0, 0, 0, 0.72); }
 body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 0 0 2px #000; }
 
@@ -40,7 +43,7 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .dim { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
 
 /* ---- shared bits -------------------------------------------------------------------------------------------------- */
-.live-label { display: inline-flex; align-items: center; gap: 8px; color: var(--live); font: 600 calc(13px * var(--scale)) var(--body); letter-spacing: 1.4px; }
+.live-label { display: inline-flex; align-items: center; gap: 8px; color: var(--live); font: 600 calc(18px * var(--scale)) var(--body); letter-spacing: 1.4px; }
 /* R-18: a label drawn on video sits on a scrim pill (75% black) so it reads on any frame. */
 .live-label.scrim, .scrim { background: rgba(0, 0, 0, 0.75); border-radius: 999px; padding: 4px 12px; }
 .live-label i { width: 9px; height: 9px; border-radius: 50%; background: var(--live); animation: livepulse 2s ease-in-out infinite; }
@@ -50,21 +53,21 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .spin.small { width: 16px; height: 16px; border-width: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .pill { position: absolute; display: flex; align-items: center; border-radius: 999px; background: rgba(11, 10, 9, 0.85); }
-.label { font-size: calc(12px * var(--scale)); font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--secondary); }
+.label { font-size: calc(18px * var(--scale)); font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--secondary); }
 .label.lamp { color: var(--lamp); }
 .t-title { font-family: var(--display); font-weight: 700; font-size: calc(32px * var(--scale)); line-height: calc(36px * var(--scale)); }
-.t-sub { font-size: calc(15px * var(--scale)); color: var(--tertiary); }
+.t-sub { font-size: calc(18px * var(--scale)); color: var(--tertiary); }
 .c-title { font-family: var(--display); font-weight: 700; font-size: calc(26px * var(--scale)); }
 .corner-title { position: absolute; left: 48px; bottom: 40px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.corner-meta { position: absolute; right: 48px; bottom: 44px; font: 500 calc(14px * var(--scale)) var(--mono); color: var(--quiet-mono); }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; font: 600 calc(15px * var(--scale)) var(--body); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.corner-meta { position: absolute; right: 48px; bottom: 44px; font: 500 calc(18px * var(--scale)) var(--mono); color: var(--quiet-mono); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; font: 600 calc(18px * var(--scale)) var(--body); transition: transform 0.15s ease, box-shadow 0.15s ease; }
 .btn.primary { background: var(--lamp); color: var(--on-lamp); }
 .btn.quiet { background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink); }
 .btn.big:focus { box-shadow: 0 0 0 3px var(--lamp); transform: scale(1.04); }
 .thumb { position: relative; overflow: hidden; border-radius: 10px; background: #3A3326; }
 .thumb img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
-.card-title { font-family: var(--display); font-weight: 700; font-size: calc(22px * var(--scale)); line-height: calc(26px * var(--scale)); }
-.meta { font-size: calc(13px * var(--scale)); color: var(--secondary); }
+.card-title { font-family: var(--display); font-weight: 700; font-size: calc(22px * var(--scale)); line-height: calc(26px * var(--scale)); text-wrap: balance; }
+.meta { font-size: calc(18px * var(--scale)); color: var(--secondary); }
 
 /* ---- TvIdle ------------------------------------------------------------------------------------------------------- */
 .idle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: var(--tv-ground); }
@@ -73,7 +76,9 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .idle .mark { width: 73px; height: 50px; }
 .idle .wordmark { height: 53px; margin-top: 1px; }
 .idle .hint { position: relative; margin: 0; font-size: calc(22px * var(--scale)); color: var(--tertiary); }
-.idle .foot { position: absolute; bottom: 32px; left: 48px; right: 48px; display: flex; justify-content: space-between; font: 500 calc(14px * var(--scale)) var(--mono); color: var(--quiet-mono); }
+.idle .foot { position: absolute; bottom: 32px; left: 48px; right: 48px; display: flex; justify-content: space-between; font: 500 calc(18px * var(--scale)) var(--mono); color: var(--quiet-mono); }
+/* R-94: without the TV's name the privacy line sits centred, not alone at the right. */
+.idle .foot.solo { justify-content: center; }
 
 /* ---- single video title overlay (fades) ------------------------------------------------------------------------- */
 .ov { opacity: 0; transition: opacity 0.4s ease; pointer-events: none; position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
@@ -92,35 +97,36 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .tile .ring { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 10px; pointer-events: none; }
 .tile:focus .ring { box-shadow: inset 0 0 0 2px var(--lamp); }
 .tile.snap:focus { transform: scale(1.04); }
-/* One label rule on both TV surfaces (R-18): title pill top-left, LIVE or time pill bottom-left, chips top-right; all on
+/* One label rule on both TV surfaces (R-18): title pill top-left, LIVE or time pill bottom-left, chips bottom-right; all on
    a 75% black scrim; insets (--sl/--st/--sr/--sb, set per tile) keep them inside the 5% title-safe area of the frame. */
-.tile .name { position: absolute; left: var(--sl, 10px); top: var(--st, 10px); max-width: calc(100% - var(--sl, 10px) - var(--sr, 10px) - 60px); padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); font: 600 calc(13px * var(--scale)) var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile .fps { position: absolute; right: var(--sr, 8px); top: var(--st, 8px); font: 500 calc(11px * var(--scale)) var(--mono); color: var(--tertiary); background: rgba(0, 0, 0, 0.75); padding: 2px 6px; border-radius: 6px; }
+.tile .name { position: absolute; left: var(--sl, 10px); top: var(--st, 10px); max-width: calc(100% - var(--sl, 10px) - var(--sr, 10px)); padding: 3px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); font: 600 calc(18px * var(--scale)) var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The frame-rate chip sits bottom-right (R-53: at 18px it no longer fits beside the title). */
+.tile .fps { position: absolute; right: var(--sr, 8px); bottom: var(--sb, 8px); font: 500 calc(18px * var(--scale)) var(--mono); color: var(--tertiary); background: rgba(0, 0, 0, 0.75); padding: 2px 8px; border-radius: 6px; }
 .tile .shade { display: none; }
 .tile .info { position: absolute; left: var(--sl, 16px); top: var(--st, 14px); max-width: calc(100% - var(--sl, 16px) - var(--sr, 16px)); display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 8px 16px; border-radius: 16px; background: rgba(0, 0, 0, 0.75); }
 .tile .info .t-title { font-size: calc(22px * var(--scale)); line-height: calc(26px * var(--scale)); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tile .info .t-sub { font-size: calc(13px * var(--scale)); }
+.tile .info .t-sub { font-size: calc(18px * var(--scale)); }
 .tile .info .t-sub:empty { display: none; }
 .tile.small .info { padding: 4px 10px; border-radius: 12px; }
-.tile.small .t-title { font-size: calc(15px * var(--scale)); line-height: calc(19px * var(--scale)); }
-.tile.small .t-sub { font-size: calc(11px * var(--scale)); }
+.tile.small .t-title { font-size: calc(18px * var(--scale)); line-height: calc(22px * var(--scale)); }
+.tile.small .t-sub { font-size: calc(18px * var(--scale)); }
 .tile .status { position: absolute; left: var(--sl, 16px); bottom: var(--sb, 14px); display: inline-flex; align-items: center; gap: 10px; padding: 4px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); }
-.tile .status .live-label { font-size: calc(12px * var(--scale)); }
-.tile .status .st-time { font-size: calc(12px * var(--scale)); color: var(--bright-mono); }
+.tile .status .live-label { font-size: calc(18px * var(--scale)); }
+.tile .status .st-time { font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
 body.ov-hidden .tile .info { opacity: 0; }
 .tile .info { transition: opacity 0.4s ease; }
 
 /* ---- TvDiscreet ----------------------------------------------------------------------------------------------------- */
 .discreet-pill { top: 40px; left: 48px; height: 44px; padding: 0 18px 0 14px; gap: 12px; }
 .discreet-pill .ic { color: var(--lamp); display: inline-flex; }
-.discreet-pill .txt { font-size: calc(15px * var(--scale)); color: var(--bright-mono); }
-.discreet-pill .mono { font-size: calc(14px * var(--scale)); color: var(--secondary); }
+.discreet-pill .txt { font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
+.discreet-pill .mono { font-size: calc(18px * var(--scale)); color: var(--secondary); }
 
 /* ---- TvBuffering -------------------------------------------------------------------------------------------------- */
 .buffering .dim { background: rgba(11, 10, 9, 0.55); }
 .center { position: absolute; left: 0; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; }
 .b-head { font-size: calc(22px * var(--scale)); color: var(--ink); }
-.b-sub { font-size: calc(15px * var(--scale)); color: var(--secondary); }
+.b-sub { font-size: calc(18px * var(--scale)); color: var(--secondary); }
 
 /* ---- TvPaused ------------------------------------------------------------------------------------------------------- */
 .paused .dim { background: rgba(11, 10, 9, 0.45); }
@@ -130,13 +136,13 @@ body.ov-hidden .tile .info { opacity: 0; }
 .progress-row { display: flex; align-items: center; gap: 16px; margin-top: 10px; }
 .track { flex: 1; height: 6px; border-radius: 3px; background: var(--control); position: relative; }
 .track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 3px; background: var(--lamp); }
-.progress-row .mono { font-size: calc(15px * var(--scale)); color: var(--bright-mono); }
+.progress-row .mono { font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
 
 /* ---- TvUpNext ------------------------------------------------------------------------------------------------------- */
 .upnext .side-shade { position: absolute; left: 0; top: 0; right: 0; bottom: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.15) 50%, rgba(11, 10, 9, 0.92) 72%, rgba(11, 10, 9, 0.96) 100%); }
 .upnext .now { position: absolute; left: 48px; bottom: 36px; display: flex; flex-direction: column; gap: 6px; }
-.upnext .now .mono { font-size: calc(14px * var(--scale)); color: var(--bright-mono); }
-.upnext .col { position: absolute; top: 40px; right: 48px; width: 300px; display: flex; flex-direction: column; gap: 18px; }
+.upnext .now .mono { font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
+.upnext .col { position: absolute; top: 40px; right: 48px; width: 340px; display: flex; flex-direction: column; gap: 18px; }
 .upnext .card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 16px; background: var(--surface); transition: box-shadow 0.15s ease; }
 .upnext .card.focus { box-shadow: inset 0 0 0 2px var(--lamp); }
 .upnext .thumb { height: 132px; }
@@ -144,27 +150,29 @@ body.ov-hidden .tile .info { opacity: 0; }
 .upnext .then { display: flex; flex-direction: column; gap: 10px; }
 .then-row { display: flex; align-items: center; gap: 12px; }
 .then-row .mini { width: 64px; height: 36px; border-radius: 6px; background: #2C2638; flex: none; }
-.then-title { font-size: calc(15px * var(--scale)); }
-.live-word { color: var(--live); font-size: calc(12px * var(--scale)); font-weight: 600; }
+.then-title { font-size: calc(18px * var(--scale)); }
+.live-word { color: var(--live); font-size: calc(18px * var(--scale)); font-weight: 600; }
 
 /* ---- reconnecting banner ------------------------------------------------------------------------------------------ */
-.banner { top: 40px; left: 48px; height: 40px; padding: 0 16px; gap: 10px; font-size: calc(14px * var(--scale)); color: var(--bright-mono); }
+.banner { top: 40px; left: 48px; height: 44px; padding: 0 18px; gap: 10px; font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
 
 /* ---- TvPhoneLost and "Starting…" ---------------------------------------------------------------------------------- */
 .phonelost .dim, .starting .dim { background: rgba(11, 10, 9, 0.78); }
 .center .h { font-family: var(--display); font-weight: 700; font-size: calc(32px * var(--scale)); line-height: calc(38px * var(--scale)); max-width: 820px; }
 .center .p { font-size: calc(19px * var(--scale)); color: var(--tertiary); line-height: calc(28px * var(--scale)); max-width: 560px; }
-.kept { margin-top: 6px; height: 34px; padding: 0 16px; border-radius: 999px; background: var(--surface); font-size: calc(14px * var(--scale)); color: var(--bright-mono); display: inline-flex; align-items: center; }
+.kept { margin-top: 6px; min-height: 40px; padding: 0 18px; border-radius: 999px; background: var(--surface); font-size: calc(18px * var(--scale)); color: var(--bright-mono); display: inline-flex; align-items: center; }
 .phonelost .corner-meta { bottom: 36px; }
 
 /* ---- TvCantPlay and "Update Lucerna on your phone" ----------------------------------------------------------------- */
 .message { background: var(--tv-ground); display: flex; align-items: center; padding: 0 96px; }
 .message .msg { display: flex; flex-direction: column; gap: 18px; max-width: 700px; align-items: flex-start; }
-.icon-tile { width: 56px; height: 56px; border-radius: 16px; background: var(--soft-lamp); color: var(--lamp); display: flex; align-items: center; justify-content: center; }
+.icon-tile { width: 56px; height: 56px; border-radius: 16px; background: var(--raised); color: var(--secondary); display: flex; align-items: center; justify-content: center; }
 .message .h { font-family: var(--display); font-weight: 700; font-size: calc(34px * var(--scale)); line-height: calc(40px * var(--scale)); letter-spacing: -0.4px; }
 .message .p { font-size: calc(19px * var(--scale)); color: var(--tertiary); line-height: calc(28px * var(--scale)); }
-.message .detail { align-self: stretch; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding: 14px 16px; border-radius: 12px; background: var(--surface); font: 500 calc(14px * var(--scale)) var(--mono); color: var(--secondary); }
-.foot-left { position: absolute; left: 96px; bottom: 34px; font: 500 calc(14px * var(--scale)) var(--mono); color: var(--quiet-mono); }
+.message .detail { align-self: stretch; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding: 14px 16px; border-radius: 12px; background: var(--surface); font: 500 calc(18px * var(--scale)) var(--mono); color: var(--secondary); }
+/* R-62: the video's title is a title (Bricolage), the format line under it stays mono. */
+.message .detail .d-title { font: 700 calc(24px * var(--scale)) / calc(30px * var(--scale)) var(--display); color: var(--ink); margin-bottom: 2px; }
+.foot-left { position: absolute; left: 96px; bottom: 34px; font: 500 calc(18px * var(--scale)) var(--mono); color: var(--quiet-mono); }
 
 /* ---- TvEnd ------------------------------------------------------------------------------------------------------- */
 .endboard { background: var(--tv-ground); padding: 56px 64px; display: grid; grid-template-columns: 1fr 340px; gap: 56px; align-items: center; }
@@ -173,7 +181,7 @@ body.ov-hidden .tile .info { opacity: 0; }
 .endboard .h { font-family: var(--display); font-weight: 700; font-size: calc(40px * var(--scale)); line-height: calc(44px * var(--scale)); letter-spacing: -0.6px; }
 .endboard .p { font-size: calc(18px * var(--scale)); color: var(--tertiary); line-height: calc(26px * var(--scale)); }
 .endboard .buttons { display: flex; gap: 14px; margin-top: 14px; }
-.endboard .btn.big { height: 52px; padding: 0 26px; font-size: calc(17px * var(--scale)); }
+.endboard .btn.big { height: 52px; padding: 0 26px; font-size: calc(18px * var(--scale)); }
 .endboard .card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; background: var(--surface); }
 .endboard .thumb { height: 168px; background: linear-gradient(160deg, #46402F 0%, #3A3326 60%, #2E291F 100%); }
 .endboard .foot-left { left: 64px; }
@@ -185,7 +193,7 @@ body.touch-ui nav.hub .hub-shade-top { position: absolute; left: 0; right: 0; to
 body.touch-ui nav.hub .hub-shade-bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 260px; background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 100%); }
 body.touch-ui nav.hub .hub-title { position: absolute; left: 32px; top: 28px; right: 260px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 body.touch-ui nav.hub .hub-title .h { font-family: var(--display); font-weight: 700; font-size: calc(34px * var(--scale)); line-height: calc(38px * var(--scale)); }
-body.touch-ui nav.hub .hub-title .s { font-size: calc(16px * var(--scale)); color: var(--tertiary); }
+body.touch-ui nav.hub .hub-title .s { font-size: calc(18px * var(--scale)); color: var(--tertiary); }
 body.touch-ui nav.hub .hub-btn { height: 64px; padding: 0 24px; border-radius: 999px; display: inline-flex; align-items: center; gap: 10px; font: 600 calc(18px * var(--scale)) var(--body); flex: none; }
 body.touch-ui nav.hub .hub-tiles { position: absolute; right: 32px; top: 32px; background: rgba(28, 26, 23, 0.92); color: var(--ink); }
 body.touch-ui nav.hub .hub-scrub { position: absolute; left: 32px; right: 32px; bottom: 132px; display: flex; align-items: center; gap: 16px; }
@@ -193,7 +201,7 @@ body.touch-ui nav.hub .hub-track { flex: 1; height: 8px; border-radius: 4px; bac
 body.touch-ui nav.hub .hub-track::before { content: ""; position: absolute; left: 0; right: 0; top: -28px; bottom: -28px; }
 body.touch-ui nav.hub .hub-track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 4px; background: var(--lamp); }
 body.touch-ui nav.hub .hub-track .knob { position: absolute; left: 0; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: var(--lamp); }
-body.touch-ui nav.hub .hub-scrub .mono { font-size: calc(16px * var(--scale)); color: var(--bright-mono); }
+body.touch-ui nav.hub .hub-scrub .mono { font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
 body.touch-ui nav.hub .hub-live { box-shadow: inset 0 0 0 1.5px var(--live); color: var(--live); }
 body.touch-ui nav.hub .hub-transport { position: absolute; left: 0; right: 0; bottom: 32px; display: flex; justify-content: center; align-items: center; gap: 40px; }
 body.touch-ui nav.hub .hub-round { width: 72px; height: 72px; border-radius: 50%; background: rgba(28, 26, 23, 0.92); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; }
@@ -201,7 +209,7 @@ body.touch-ui nav.hub .hub-play { width: 88px; height: 88px; background: var(--l
 body.touch-ui nav.hub .hub-play .i-play { display: none; }
 body.touch-ui nav.hub.is-paused .hub-play .i-play { display: block; }
 body.touch-ui nav.hub.is-paused .hub-play .i-pause { display: none; }
-body.touch-ui nav.hub .hub-count { position: absolute; right: 32px; bottom: 52px; font-size: calc(14px * var(--scale)); color: var(--secondary); }
+body.touch-ui nav.hub .hub-count { position: absolute; right: 32px; bottom: 52px; font-size: calc(18px * var(--scale)); color: var(--secondary); }
 body.touch-ui nav.hub .hub-btn:focus, body.touch-ui nav.hub .hub-round:focus { box-shadow: 0 0 0 3px var(--lamp); }
 body.touch-ui nav.hub .hub-live:focus { box-shadow: inset 0 0 0 1.5px var(--live), 0 0 0 3px var(--lamp); }
 body.touch-ui nav.hub.over-tiles .hub-title, body.touch-ui nav.hub.over-tiles .hub-scrub, body.touch-ui nav.hub.over-tiles .hub-shade-top { display: none; }
@@ -217,6 +225,10 @@ body.touch-ui nav.hub.over-tiles .hub-count { right: 52px; bottom: 46px; }
 body.touch-ui #tiles .tile.chosen .ring { box-shadow: inset 0 0 0 3px var(--lamp); }
 /* On touch displays the hub replaces the fading title overlay and the paused card. */
 body.touch-ui #ov, body.touch-ui #paused { display: none; }
+
+/* ---- resting (R-67): End, Paused and PhoneLost boards give way to the idle screen after 5 minutes ---------------- */
+body.resting #vwrap, body.resting #tiles, body.resting #ov, body.resting .pill, body.resting #buffering, body.resting #paused,
+body.resting #upnext, body.resting #phonelost, body.resting #end, body.resting nav.hub { display: none !important; }
 
 /* ---- discreet (C9): no titles or pictures ------------------------------------------------------------------------ */
 body.discreet #ov, body.discreet .tile .info, body.discreet .tile .name, body.discreet .thumb img { display: none; }
