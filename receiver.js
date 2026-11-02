@@ -67,6 +67,7 @@
     cant: null,
     starting: null,
     overlayUntil: 0,
+    exitUntil: 0,           // D-94: "Press Back again to exit" shows until then; a Back before it closes the page
     hubUntil: 0,
     pausedLocally: false,
     hidden: false,
@@ -451,6 +452,7 @@
       if (b - t < 0.05) { t = 0; b = 1; }
       return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color, note: s.note ? M.cap(s.note) : '', paused: !!s.paused };
     });
+    S.exitUntil = 0;   // D-94: Back brought the grid back (a filled tile), it didn't ask to leave
     var before = S.tiles ? S.tiles.slots : [];
     S.tiles = { layout: layout, slots: slots, focused: clamp(m.focused, 0, Math.max(0, slots.length - 1)), audio: m.audio, mode: m.mode,
       muted: !!m.muted, othersPause: !!m.othersPause };
@@ -655,6 +657,21 @@
     cls(body, 'ov-hidden', now() > S.overlayUntil && mode === 'focus' && !S.fake);
   }
 
+  /**
+   * D-94: Back with nothing left to back out of: the first asks ("Press Back again to exit"), a second within 3 s closes
+   * the TV page. The phone is told first, so it ends the cast instead of reconnecting to a page that left.
+   */
+  function backToExit() {
+    var t = now();
+    if (t < S.exitUntil) {
+      S.exitUntil = 0;
+      send('key', { action: 'exit' });
+      setTimeout(function () { try { if (context && context.stop) context.stop(); } catch (e) { console.warn('[lucerna] stop', e); } }, 300);
+      return;
+    }
+    S.exitUntil = t + 3000;
+  }
+
   function chooseTile(i) {
     if (!S.tiles || !S.tiles.slots[i]) return;
     // Immediate feedback; the phone answers with the new tile state and the tile's stream (T1).
@@ -729,6 +746,8 @@
   function pullSnap(t, i) {
     var tmpl = S.snapUrls[i];
     if (!tmpl || S.hidden || t.loading || S.snapTransport !== 'http' || S.screen !== 'play') return;
+    // D-93: a paused tile's picture can't change: it keeps the one it has (re-fetching it flashed at the snapshot rate).
+    if (t.slot && t.slot.paused && t.imgs.some(function (img) { return img.classList.contains('on'); })) return;
     var back = t.imgs[1 - t.front];
     t.loading = true;
     back.src = tmpl + (tmpl.indexOf('?') >= 0 ? '&' : '?') + 't=' + now();
@@ -1086,6 +1105,7 @@
     }
 
     cls(body, 'tiles-on', playing && !!mode);
+    show($('exitHint'), t < S.exitUntil);
 
     // buffering (after a short delay, so a quick hiccup doesn't flash)
     var buffering = playing && (st === 'BUFFERING' || S.loading);
@@ -1412,7 +1432,7 @@
         // D-89: OK on the tile that already has sound opens its controls; on another tile, gives that tile the sound.
         if (i === S.tiles.audio && i === S.tiles.focused && !S.touch) openBar(i);
         else chooseTile(i);
-      } else if (k === 'back') send('key', { action: 'back' });
+      } else if (k === 'back') backToExit();   // D-94: Back backs out (Full screen is in the bar)
       else if (k === 'down' && i >= 0 && !nearest(tiles[i], 'down', tiles)) openBar(i);   // the bottom row: down to the bar
       else moveFocus(k, tiles);
       render();
@@ -1422,8 +1442,9 @@
       if (k === 'ok') send('key', { action: 'toggle' });
       else if (k === 'right') send('key', { action: 'next' });
       else if (k === 'left') send('key', { action: 'previous' });
-      else if (k === 'back') send('key', { action: 'back' });
-    }
+      // A tile filling the screen goes back to the grid (the phone knows; its tiles answer clears the hint).
+      else if (k === 'back') { send('key', { action: 'back' }); backToExit(); }
+    } else if (k === 'back' && S.screen !== 'end') backToExit();
     render();
   }
   document.addEventListener('keydown', onKey);

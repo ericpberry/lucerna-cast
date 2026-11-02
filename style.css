@@ -157,6 +157,7 @@ body.discreet .bar-title { display: none; }
 body.bar-open .tile.video .status { display: none; }   /* the bar shows the time (or LIVE) */
 
 /* ---- TvDiscreet ----------------------------------------------------------------------------------------------------- */
+.exit-hint { left: 50%; bottom: 48px; transform: translateX(-50%); height: 48px; padding: 0 22px; font: 500 calc(20px * var(--scale)) var(--body); color: var(--ink); white-space: nowrap; z-index: 20; }
 .discreet-pill { top: 40px; left: 48px; height: 44px; padding: 0 18px 0 14px; gap: 12px; }
 .discreet-pill .ic { color: var(--lamp); display: inline-flex; }
 .discreet-pill .txt { font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
