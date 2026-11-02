@@ -642,15 +642,19 @@
     render();
   }
 
-  /** Where the media element goes: full-bleed for one video, or into the focused slot with crop and zoom (R4). */
+  /**
+   * Where the media element goes: full-bleed for one video, or into the focused slot with crop and zoom (R4).
+   * Placed with plain boxes, never CSS transform or clip-path: Cast and Android TV devices draw video on a hardware
+   * plane that can't be scaled or clipped that way, and showed black with the clock running (D-87). #vwrap becomes the
+   * slot (a plain rectangle, overflow hidden); the video's box is the whole frame scaled so the crop fills the slot.
+   */
   function placeVideo() {
     var target = PREVIEW ? $('fakevideo') : video;
     var wrap = $('vwrap');
     var mode = tilesMode();
     var vw = window.innerWidth || view.W, vh = window.innerHeight || view.H;
     if (mode !== 'focus' || S.screen !== 'play') {
-      target.style.transform = '';
-      wrap.style.clipPath = ''; wrap.style.webkitClipPath = '';
+      ['left', 'top', 'width', 'height', 'objectFit'].forEach(function (k) { target.style[k] = ''; wrap.style[k] = ''; });
       return;
     }
     var r = tileRects()[S.tiles.focused];
@@ -662,11 +666,13 @@
     var c = slot.crop;
     var rx = cx + c.l * cw, ry = cy + c.t * ch, rw = (c.r - c.l) * cw, rh = (c.b - c.t) * ch;
     var k = Math.max(sw / rw, sh / rh) * slot.zoom;
-    var tx = sx + sw / 2 - k * (rx + rw / 2), ty = sy + sh / 2 - k * (ry + rh / 2);
-    target.style.transform = 'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) scale(' + k.toFixed(5) + ')';
-    var rad = (10 * view.s).toFixed(2);
-    var clip = 'inset(' + sy.toFixed(2) + 'px ' + (vw - sx - sw).toFixed(2) + 'px ' + (vh - sy - sh).toFixed(2) + 'px ' + sx.toFixed(2) + 'px round ' + rad + 'px)';
-    wrap.style.clipPath = clip; wrap.style.webkitClipPath = clip;
+    // The frame's top-left on screen (the crop's centre on the slot's centre), then relative to the slot.
+    var fx = sx + sw / 2 - k * (rx + rw / 2) + k * cx, fy = sy + sh / 2 - k * (ry + rh / 2) + k * cy;
+    wrap.style.left = sx.toFixed(2) + 'px'; wrap.style.top = sy.toFixed(2) + 'px';
+    wrap.style.width = sw.toFixed(2) + 'px'; wrap.style.height = sh.toFixed(2) + 'px';
+    target.style.left = (fx - sx).toFixed(2) + 'px'; target.style.top = (fy - sy).toFixed(2) + 'px';
+    target.style.width = (k * cw).toFixed(2) + 'px'; target.style.height = (k * ch).toFixed(2) + 'px';
+    target.style.objectFit = 'fill';
   }
 
   // ---- motion snapshots: http first, channel after two failed image loads (R4, P-4) -------------------------------------

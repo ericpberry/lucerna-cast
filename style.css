@@ -29,9 +29,9 @@ button { font: inherit; color: inherit; border: none; background: none; padding:
 button:focus { outline: none; }
 .mono { font-family: var(--mono); font-weight: 500; }
 
-/* ---- video: full-bleed, moved into a tile slot by transform (R4) ------------------------------------------------ */
+/* ---- video: full-bleed, or boxed into a slot by placeVideo (R4; no transform or clip-path, D-87) --------------------------------------------- */
 #vwrap { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; }
-#media, #fakevideo { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; object-fit: contain; background: transparent; }
+#media, #fakevideo { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; background: transparent; }
 body.screen-idle #vwrap, body.screen-end #vwrap, body.screen-cantplay #vwrap, body.screen-update #vwrap { visibility: hidden; }
 /* C-B5 / C-B16: from a new LOAD (or Stop) until the new video plays, the old video's last frame never shows. */
 body.fresh #vwrap { visibility: hidden; }
