@@ -48,7 +48,7 @@
   T.queue = [['seq', 'long', 0], ['upNext', 'list:QueueEntry', 'new']];
   T.end = [['seq', 'long', 0], ['played', 'int', 0]];
   T.caps = [['seq', 'long', 0], ['video', 'list:string', 'new'], ['maxHeight', 'int', 1080], ['touch', 'bool', false],
-    ['kind', 'string', 'web'], ['maxTiles', 'int', 1], ['v', 'int', VERSION]];
+    ['kind', 'string', 'web'], ['maxTiles', 'int', 1], ['deviceType', 'string?', null], ['v', 'int', VERSION]];
   T.state = [['seq', 'long', 0], ['itemId', 'string?', null], ['positionMs', 'long', 0], ['playing', 'bool', false],
     ['buffering', 'bool', false], ['behindLiveS', 'float?', null], ['snapTransport', 'string?', null], ['hidden', 'bool', false],
     ['videoHeight', 'int?', null]];

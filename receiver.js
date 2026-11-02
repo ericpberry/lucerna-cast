@@ -312,8 +312,25 @@
     var key = enumObj.TOUCH_INPUT_SUPPORTED || 'touch_input_supported';
     return !!(caps[key] || caps.touch_input_supported);
   }
+  /**
+   * D-95: what this TV is, from the DeviceType Cast puts in the browser's user agent: a Google TV / Android TV can
+   * install the Lucerna TV app (the phone offers it there); a Chromecast or a Nest Hub can't. Null when unknown.
+   */
+  var DEVICE_TYPE_RE = /DeviceType\/(\w+)/;
+  function deviceType() {
+    var m = DEVICE_TYPE_RE.exec(navigator.userAgent || '');
+    if (!m) return null;
+    var t = m[1].toLowerCase();
+    if (t === 'androidtv') return 'androidtv';
+    if (t === 'chromecast') return 'chromecast';
+    if (t === 'smartdisplay') return 'display';
+    return null;
+  }
   function sendCaps() {
-    send('caps', { video: supportedCodecs().slice(), maxHeight: maxHeight(), touch: S.touch, kind: 'web', maxTiles: 4, v: M.VERSION });
+    var caps = { video: supportedCodecs().slice(), maxHeight: maxHeight(), touch: S.touch, kind: 'web', maxTiles: 4, v: M.VERSION };
+    var dt = deviceType();
+    if (dt) caps.deviceType = dt;
+    send('caps', caps);
   }
   function setTouch(on) {
     S.touch = !!on;
