@@ -1226,18 +1226,16 @@
   // ---- tiles, controls level (D-89): the bar for the tile with sound -----------------------------------------------------
   var BAR_HIDE_MS = 5000;
   function barSlot() { return S.tiles ? S.tiles.slots[S.tiles.audio] || S.tiles.slots[S.tiles.focused] || null : null; }
-  /** The bar's focusable controls, left to right (only the visible ones). */
+  /** The bar's buttons, left to right (only the visible ones); the progress line is the row above them (D-92). */
   function barButtons() {
-    return ['barToggle', 'barBack', 'barScrub', 'barJump', 'barFwd', 'barMute', 'barOthers', 'barFull']
+    return ['barToggle', 'barJump', 'barMute', 'barOthers', 'barFull']
       .map(function (id) { return $(id); }).filter(function (b) { return b.offsetParent !== null; });
   }
   function openBar(from) {
     if (S.touch || !tilesMode() || S.screen !== 'play') return;
-    S.bar = { from: from, until: now() + BAR_HIDE_MS };
+    S.bar = { from: from, until: now() + BAR_HIDE_MS, last: null };
     render();
-    var slot = barSlot();
-    // Lands on the timeline (Jump to live on a live tile): the control most presses want.
-    focusFirst([slot && slot.live ? $('barJump') : $('barScrub'), $('barToggle')].filter(function (b) { return b.offsetParent !== null; }));
+    focusFirst([$('barToggle')]);   // D-92: on Play/Pause, as YouTube
   }
   function closeBar() {
     if (!S.bar) return;
@@ -1246,51 +1244,57 @@
     render();
     if (S.tiles) focusTileButton(S.tiles.slots[from] ? from : S.tiles.focused);
   }
+  function tip(b, words) { b.setAttribute('aria-label', words); b.setAttribute('data-tip', words); }
   function renderBar(on, st, pos, dur) {
     var bar = $('bar');
     if (S.bar && (!on || now() > S.bar.until)) { closeBar(); return; }
     show(bar, on && !!S.bar);
+    cls(body, 'bar-open', on && !!S.bar);
     if (!S.bar || !on) return;
     var slot = barSlot();
     var live = !!(slot && slot.live);
     setText($('barTitle'), S.hello.discreet ? '' : (slot && slot.title) || curTitle());
     var isPaused = st === 'PAUSED' || !!(slot && slot.paused);
     cls(bar, 'is-paused', isPaused);
-    $('barToggle').setAttribute('aria-label', isPaused ? 'Play' : 'Pause');
+    cls(bar, 'is-live', live);
     cls(bar, 'is-muted', !!S.tiles.muted);
-    setText($('barMuteLabel'), S.tiles.muted ? 'Unmute' : 'Mute');
-    setText($('barOthers'), S.tiles.othersPause ? 'Others: Pause' : 'Others: Keep playing');
-    show($('barScrub'), !live);
-    show($('barLiveBox'), live);
-    show($('barLive'), live);   // LIVE where the time would be; Jump to live where the timeline would be
+    cls(bar, 'others-pause', !!S.tiles.othersPause);
+    tip($('barToggle'), isPaused ? 'Play' : 'Pause');
+    tip($('barMute'), S.tiles.muted ? 'Unmute' : 'Mute');
+    tip($('barOthers'), S.tiles.othersPause ? 'Others pause' : 'Others keep playing');
+    show($('barJump'), live);
+    show($('barLive'), live);
     var hours = dur >= 3600;
     var timeText = !live && dur > 0 ? fmt(pos, hours) + ' / ' + fmt(dur, hours) : '';
     setText($('barTime'), timeText);
     show($('barTime'), !!timeText);
-    var frac = !live && dur > 0 ? clamp(pos / dur, 0, 1) : 0;
+    var frac = live ? 1 : dur > 0 ? clamp(pos / dur, 0, 1) : 0;
     $('barScrubFill').style.width = (frac * 100).toFixed(2) + '%';
     $('barKnob').style.left = (frac * 100).toFixed(2) + '%';
     // A control that went away (the tile turned live, or stopped being live) hands focus to the first one left.
-    if (!bar.contains(document.activeElement) || document.activeElement.offsetParent === null) focusFirst(barButtons());
+    var a = document.activeElement;
+    if (a !== $('barScrub') && (!bar.contains(a) || a.offsetParent === null)) focusFirst(barButtons());
   }
-  /** Remote keys while the bar is open: Left/Right between controls (seek on the timeline), Up or Back close it. */
+  /**
+   * Remote keys while the bar is open (D-92, YouTube): Left/Right between the buttons; Up to the progress line, where
+   * Left/Right seek 10 s and Down comes back to the button you left; Up there, or Back anywhere, closes the bar.
+   */
   function barKey(k) {
     var list = barButtons();
     var cur = document.activeElement;
-    var i = list.indexOf(cur);
-    if (k === 'up' || k === 'back') { closeBar(); return; }
-    if (cur === $('barScrub') && (k === 'left' || k === 'right')) { send('key', { action: 'seekBy', n: k === 'left' ? -10 : 10 }); return; }
-    if (k === 'left' || k === 'right') {
-      if (i < 0) { focusFirst(list); return; }
-      focusFirst([list[clamp(i + (k === 'left' ? -1 : 1), 0, list.length - 1)]]);
+    if (k === 'back') { closeBar(); return; }
+    if (cur === $('barScrub')) {
+      if (k === 'left' || k === 'right') send('key', { action: 'seekBy', n: k === 'left' ? -10 : 10 });
+      else if (k === 'down') focusFirst([S.bar.last && S.bar.last.offsetParent !== null ? S.bar.last : $('barToggle')]);
+      else if (k === 'up') closeBar();
+      else if (k === 'ok') send('key', { action: 'toggle' });
       return;
     }
-    if (k === 'down') { if (cur === $('barScrub') && list[i + 1]) focusFirst([list[i + 1]]); return; }   // off the timeline
-    if (k === 'ok') {
-      if (cur === $('barScrub')) send('key', { action: 'toggle' });
-      else if (i >= 0) cur.click();
-      else focusFirst(list);
-    }
+    var i = list.indexOf(cur);
+    if (i < 0) { focusFirst(list); return; }
+    if (k === 'left' || k === 'right') { focusFirst([list[clamp(i + (k === 'left' ? -1 : 1), 0, list.length - 1)]]); return; }
+    if (k === 'up') { S.bar.last = cur; focusFirst([$('barScrub')]); return; }
+    if (k === 'ok') cur.click();
   }
 
   function renderHub(on, st, pos, dur, live, title, site, it) {
@@ -1445,8 +1449,6 @@
   $('hubNext').addEventListener('click', function () { send('key', { action: 'next' }); });
   // D-89: the tiles' control bar; each button is one key to the phone, which answers with tiles and the session.
   $('barToggle').addEventListener('click', function () { send('key', { action: 'toggle' }); });
-  $('barBack').addEventListener('click', function () { send('key', { action: 'seekBy', n: -10 }); });
-  $('barFwd').addEventListener('click', function () { send('key', { action: 'seekBy', n: 10 }); });
   $('barJump').addEventListener('click', function () { send('key', { action: 'jumpLive' }); });
   $('barMute').addEventListener('click', function () { send('key', { action: 'mute' }); });
   $('barOthers').addEventListener('click', function () { send('key', { action: 'othersPause' }); });

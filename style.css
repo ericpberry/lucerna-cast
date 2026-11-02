@@ -128,29 +128,33 @@ body.ov-hidden .tile .info { opacity: 0; }
 .tile.chips-1 .name, .tile.chips-1 .info { max-width: calc(100% - var(--sl, 16px) - var(--sr, 16px) - 46px); }
 .tile.chips-2 .name, .tile.chips-2 .info { max-width: calc(100% - var(--sl, 16px) - var(--sr, 16px) - 90px); }
 
-/* ---- tiles, controls level (D-89): the bar for the tile with sound, inside title safe ------------------------------ */
-.bar { position: absolute; left: 48px; right: 48px; bottom: 28px; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; border-radius: 18px; background: var(--surface); }
-.bar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 0 4px; }
-.bar-head .bar-title { min-width: 0; font: 700 calc(22px * var(--scale)) / calc(26px * var(--scale)) var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-head .bar-time { flex: none; margin-left: auto; font-size: calc(20px * var(--scale)); color: var(--bright-mono); }
-.bar-row { display: flex; align-items: center; gap: 8px; }
-.bar-btn { flex: none; height: 48px; padding: 0 12px; border-radius: 999px; background: var(--raised); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; font: 600 calc(18px * var(--scale)) var(--body); transition: transform 0.15s ease, box-shadow 0.15s ease; }
-.bar-btn.mono { font-family: var(--mono); font-weight: 500; }
-.bar-round { width: 48px; padding: 0; }
-.bar .i-play, .bar .i-muted { display: none; }
-.bar.is-paused .i-play, .bar.is-muted .i-muted { display: block; }
+/* ---- tiles, controls level (D-89, D-92): YouTube-style over a bottom gradient; title-safe 48 px sides, 28 px bottom -- */
+.bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 56px 50px 30px; display: flex; flex-direction: column; gap: 6px;
+  background: linear-gradient(to top, rgba(11, 10, 9, 0.94) 0%, rgba(11, 10, 9, 0.78) 55%, rgba(11, 10, 9, 0) 100%); }
+.bar-title { font: 600 calc(18px * var(--scale)) / calc(24px * var(--scale)) var(--body); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-progress { width: 100%; height: 22px; padding: 0; background: transparent; display: flex; align-items: center; }
+.bar-track { flex: 1; height: 4px; border-radius: 2px; background: rgba(244, 240, 232, 0.28); position: relative; transition: height 0.15s ease; }
+.bar-track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 2px; background: var(--lamp); }
+.bar-track .knob { position: absolute; left: 0; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--lamp); opacity: 0; transition: opacity 0.15s ease; }
+.bar-progress:focus .bar-track { height: 6px; }
+.bar-progress:focus .knob { opacity: 1; }
+.bar.is-live .knob { display: none; }
+.bar-row { display: flex; align-items: center; gap: 6px; margin-top: 22px; }   /* room for the focused button's label */
+.bar-gap { flex: 1; }
+.bar-icon { position: relative; flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; background: transparent; color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease; }
+.bar-icon:focus { background: rgba(244, 240, 232, 0.14); box-shadow: 0 0 0 3px var(--lamp); transform: scale(1.04); }
+/* The focused button says what it does, just above it (the last one's label keeps to the right edge). */
+.bar-icon:focus::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  white-space: nowrap; padding: 3px 10px; border-radius: 6px; background: rgba(11, 10, 9, 0.9); color: var(--ink); font: 500 calc(14px * var(--scale)) / calc(20px * var(--scale)) var(--body); }
+.bar-row .bar-icon:last-child:focus::after { left: auto; right: 0; transform: none; }
+.bar-time { margin-left: 6px; font-size: calc(15px * var(--scale)); color: var(--bright-mono); }
+.bar-row .live-label { margin-left: 6px; font-size: calc(15px * var(--scale)); }
+.bar .i-play, .bar .i-muted, .bar .i-others-pause { display: none; }
+.bar.is-paused .i-play, .bar.is-muted .i-muted, .bar.others-pause .i-others-pause { display: block; }
 .bar.is-paused .i-pause, .bar.is-muted .i-sound { display: none; }
-.bar-scrub { flex: 1 1 64px; min-width: 64px; height: 48px; padding: 0 16px; border-radius: 999px; display: flex; align-items: center; transition: transform 0.15s ease, box-shadow 0.15s ease; }
-.bar-track { flex: 1; height: 6px; border-radius: 3px; background: var(--control); position: relative; }
-.bar-track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 3px; background: var(--lamp); }
-.bar-track .knob { position: absolute; left: 0; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--ink); }
-.bar-scrub:focus .knob { background: var(--lamp); }
-.bar-live { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; gap: 10px; }
-.bar-head .live-label { flex: none; margin-left: auto; font-size: calc(18px * var(--scale)); }
-.bar-btn.bar-jump { background: transparent; color: var(--live); box-shadow: inset 0 0 0 1.5px var(--live); }
-.bar-btn:focus, .bar-scrub:focus { box-shadow: 0 0 0 3px var(--lamp); transform: scale(1.04); }
-.bar-btn.bar-jump:focus { box-shadow: inset 0 0 0 1.5px var(--live), 0 0 0 3px var(--lamp); }
 body.discreet .bar-title { display: none; }
+body.bar-open .tile.video .status { display: none; }   /* the bar shows the time (or LIVE) */
 
 /* ---- TvDiscreet ----------------------------------------------------------------------------------------------------- */
 .discreet-pill { top: 40px; left: 48px; height: 44px; padding: 0 18px 0 14px; gap: 12px; }
