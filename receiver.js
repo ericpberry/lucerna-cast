@@ -57,6 +57,7 @@
     updateV: 0,             // hello.v newer than this page: "Update Lucerna on your phone"
     tiles: null,
     tileKey: '',
+    bar: null,              // D-89: the tiles' control bar, open: { from: tile index to return to, until: ms }
     snapUrls: {},
     snapTransport: 'http',
     snapFails: 0,
@@ -419,6 +420,8 @@
     snapTimers = [];
     tileEls = [];
     $('tiles').textContent = '';
+    S.bar = null;
+    video.muted = false;   // D-89: mute belongs to the tile with sound; one video plays with sound again
     placeVideo();
   }
 
@@ -446,10 +449,14 @@
       var l = clamp(c.l, 0, 1), t = clamp(c.t, 0, 1), r = clamp(c.r, 0, 1), b = clamp(c.b, 0, 1);
       if (r - l < 0.05) { l = 0; r = 1; }
       if (b - t < 0.05) { t = 0; b = 1; }
-      return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color, note: s.note ? M.cap(s.note) : '' };
+      return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color, note: s.note ? M.cap(s.note) : '', paused: !!s.paused };
     });
     var before = S.tiles ? S.tiles.slots : [];
-    S.tiles = { layout: layout, slots: slots, focused: clamp(m.focused, 0, Math.max(0, slots.length - 1)), audio: m.audio, mode: m.mode };
+    S.tiles = { layout: layout, slots: slots, focused: clamp(m.focused, 0, Math.max(0, slots.length - 1)), audio: m.audio, mode: m.mode,
+      muted: !!m.muted, othersPause: !!m.othersPause };
+    // D-89: the page's video is the tile with sound; the phone says whether it is muted.
+    video.muted = !!m.muted;
+    if (S.bar && !S.tiles.slots[S.bar.from]) S.bar.from = S.tiles.focused;
     var key = layout + '|' + slots.length + '|' + m.mode;
     var rebuilt = key !== S.tileKey;
     // C-B5: a tile that now shows another video (or none) never keeps the old one's picture or snapshot address. M1: a
@@ -516,6 +523,8 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
+  var PAUSE_GLYPH = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>';
+  var MUTED_GLYPH = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M22 9l-6 6M16 9l6 6"></path></svg>';
   function liveLabel() { var s = el('span', 'live-label'); s.appendChild(el('i')); s.appendChild(document.createTextNode('LIVE')); return s; }
 
   function buildTiles(rebuilt) {
@@ -548,9 +557,15 @@
         b.appendChild(el('span', 'fps'));
         // M1, m11: what a tile without a picture is doing, in plain words ("Loading…", the phone's note, "Add a video").
         b.appendChild(el('span', 'hint'));
+        // D-89: paused and muted chips top-right (R-18), Ink on the scrim.
+        var chips = el('span', 'chips');
+        var cp = el('span', 'chip chip-paused'); cp.innerHTML = PAUSE_GLYPH;
+        var cm = el('span', 'chip chip-muted'); cm.innerHTML = MUTED_GLYPH;
+        chips.appendChild(cp); chips.appendChild(cm);
+        b.appendChild(chips);
         b.appendChild(el('span', 'ring'));
         b.addEventListener('click', function () { if (!S.touch) return; chooseTile(i); });
-        var t = { btn: b, frames: frames, imgs: [a, c], front: 0, info: info, status: status, name: b.querySelector('.name'), fps: b.querySelector('.fps'), hint: b.querySelector('.hint'), loading: false, nat: null, since: now() };
+        var t = { btn: b, frames: frames, imgs: [a, c], front: 0, info: info, status: status, name: b.querySelector('.name'), fps: b.querySelector('.fps'), hint: b.querySelector('.hint'), chipPaused: cp, chipMuted: cm, loading: false, nat: null, since: now() };
         [a, c].forEach(function (img, k) {
           img.addEventListener('load', function () { onFrameLoaded(t, k); });
           img.addEventListener('error', function () { onFrameFailed(t, k); });
@@ -582,7 +597,7 @@
 
   function focusTileButton(i) {
     var t = tileEls[i];
-    if (t && !S.touch && overlayButtons().length === 0) { try { t.btn.focus({ preventScroll: true }); } catch (e) { t.btn.focus(); } }
+    if (t && !S.touch && !S.bar && overlayButtons().length === 0) { try { t.btn.focus({ preventScroll: true }); } catch (e) { t.btn.focus(); } }
   }
 
   function renderTiles() {
@@ -608,7 +623,7 @@
       var subParts = [];
       var slotItem = slot.itemId ? S.items[slot.itemId] : null;
       if (showInfo && slotItem && slotItem.site && !S.hello.discreet) subParts.push(slotItem.site);
-      if (S.tiles.audio === i) subParts.push('sound on');
+      if (S.tiles.audio === i) subParts.push(S.tiles.muted ? 'muted' : 'sound on');
       setText(t.info.querySelector('.t-sub'), subParts.join(' · '));
       show(t.name, !showInfo && !!title);
       setText(t.name, title);
@@ -627,6 +642,15 @@
       setText(t.hint, hint);
       show(t.hint, !!hint);
       cls(t.hint, 'quiet', !slot.itemId);
+      // D-89: the paused chip on a paused tile (the video tile also when the session itself is paused); the muted chip
+      // on the tile with sound when it is muted.
+      var isPaused = !!slot.paused || (t.isVideo && pState() === 'PAUSED');
+      var isMuted = !!S.tiles.muted && S.tiles.audio === i;
+      show(t.chipPaused, isPaused);
+      show(t.chipMuted, isMuted);
+      var nChips = (isPaused ? 1 : 0) + (isMuted ? 1 : 0);
+      cls(t.btn, 'chips-1', nChips === 1);
+      cls(t.btn, 'chips-2', nChips === 2);
     });
     cls(body, 'ov-hidden', now() > S.overlayUntil && mode === 'focus' && !S.fake);
   }
@@ -1104,6 +1128,7 @@
     // tiles; the first remote press must land on a focused button (Spool D-116)
     renderTiles();
     if (playing && mode && !S.touch && !$('tiles').contains(document.activeElement) && !S.starting && overlayButtons().length === 0) focusTileButton(S.tiles.focused);
+    renderBar(playing && !!mode && !S.touch && !lost && !S.starting, st, pos, dur);
 
     // buffering
     show($('buffering'), showBuffering && !S.starting);
@@ -1117,7 +1142,8 @@
     setText($('bufMeta'), vh ? vh + 'p' : '');
 
     // paused (TvPaused)
-    show($('paused'), paused && !S.starting && !lost);
+    // D-89: with tiles, a paused tile carries its own chip; the board would cover the whole grid.
+    show($('paused'), paused && !S.starting && !lost && !mode);
     setText($('pauseTitle'), title);
     var fromPhone = !S.pausedLocally;
     setText($('pauseSub'), [site, fromPhone ? 'paused from your phone' : 'paused'].filter(Boolean).join(' · '));
@@ -1197,6 +1223,76 @@
     if (!PREVIEW) sendState(false);
   }
 
+  // ---- tiles, controls level (D-89): the bar for the tile with sound -----------------------------------------------------
+  var BAR_HIDE_MS = 5000;
+  function barSlot() { return S.tiles ? S.tiles.slots[S.tiles.audio] || S.tiles.slots[S.tiles.focused] || null : null; }
+  /** The bar's focusable controls, left to right (only the visible ones). */
+  function barButtons() {
+    return ['barToggle', 'barBack', 'barScrub', 'barJump', 'barFwd', 'barMute', 'barOthers', 'barFull']
+      .map(function (id) { return $(id); }).filter(function (b) { return b.offsetParent !== null; });
+  }
+  function openBar(from) {
+    if (S.touch || !tilesMode() || S.screen !== 'play') return;
+    S.bar = { from: from, until: now() + BAR_HIDE_MS };
+    render();
+    var slot = barSlot();
+    // Lands on the timeline (Jump to live on a live tile): the control most presses want.
+    focusFirst([slot && slot.live ? $('barJump') : $('barScrub'), $('barToggle')].filter(function (b) { return b.offsetParent !== null; }));
+  }
+  function closeBar() {
+    if (!S.bar) return;
+    var from = S.bar.from;
+    S.bar = null;
+    render();
+    if (S.tiles) focusTileButton(S.tiles.slots[from] ? from : S.tiles.focused);
+  }
+  function renderBar(on, st, pos, dur) {
+    var bar = $('bar');
+    if (S.bar && (!on || now() > S.bar.until)) { closeBar(); return; }
+    show(bar, on && !!S.bar);
+    if (!S.bar || !on) return;
+    var slot = barSlot();
+    var live = !!(slot && slot.live);
+    setText($('barTitle'), S.hello.discreet ? '' : (slot && slot.title) || curTitle());
+    var isPaused = st === 'PAUSED' || !!(slot && slot.paused);
+    cls(bar, 'is-paused', isPaused);
+    $('barToggle').setAttribute('aria-label', isPaused ? 'Play' : 'Pause');
+    cls(bar, 'is-muted', !!S.tiles.muted);
+    setText($('barMuteLabel'), S.tiles.muted ? 'Unmute' : 'Mute');
+    setText($('barOthers'), S.tiles.othersPause ? 'Others: Pause' : 'Others: Keep playing');
+    show($('barScrub'), !live);
+    show($('barLiveBox'), live);
+    show($('barLive'), live);   // LIVE where the time would be; Jump to live where the timeline would be
+    var hours = dur >= 3600;
+    var timeText = !live && dur > 0 ? fmt(pos, hours) + ' / ' + fmt(dur, hours) : '';
+    setText($('barTime'), timeText);
+    show($('barTime'), !!timeText);
+    var frac = !live && dur > 0 ? clamp(pos / dur, 0, 1) : 0;
+    $('barScrubFill').style.width = (frac * 100).toFixed(2) + '%';
+    $('barKnob').style.left = (frac * 100).toFixed(2) + '%';
+    // A control that went away (the tile turned live, or stopped being live) hands focus to the first one left.
+    if (!bar.contains(document.activeElement) || document.activeElement.offsetParent === null) focusFirst(barButtons());
+  }
+  /** Remote keys while the bar is open: Left/Right between controls (seek on the timeline), Up or Back close it. */
+  function barKey(k) {
+    var list = barButtons();
+    var cur = document.activeElement;
+    var i = list.indexOf(cur);
+    if (k === 'up' || k === 'back') { closeBar(); return; }
+    if (cur === $('barScrub') && (k === 'left' || k === 'right')) { send('key', { action: 'seekBy', n: k === 'left' ? -10 : 10 }); return; }
+    if (k === 'left' || k === 'right') {
+      if (i < 0) { focusFirst(list); return; }
+      focusFirst([list[clamp(i + (k === 'left' ? -1 : 1), 0, list.length - 1)]]);
+      return;
+    }
+    if (k === 'down') { if (cur === $('barScrub') && list[i + 1]) focusFirst([list[i + 1]]); return; }   // off the timeline
+    if (k === 'ok') {
+      if (cur === $('barScrub')) send('key', { action: 'toggle' });
+      else if (i >= 0) cur.click();
+      else focusFirst(list);
+    }
+  }
+
   function renderHub(on, st, pos, dur, live, title, site, it) {
     var hub = $('hub');
     show(hub, on);
@@ -1243,6 +1339,11 @@
   function moveFocus(dir, cands) {
     var cur = document.activeElement;
     if (cands.indexOf(cur) < 0) { focusFirst(cands); return; }
+    var best = nearest(cur, dir, cands);
+    if (best) { try { best.focus({ preventScroll: true }); } catch (e) { best.focus(); } }
+  }
+  /** The nearest candidate from `cur` in a direction, or null when there is none that way. */
+  function nearest(cur, dir, cands) {
     var a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
     var best = null, bestScore = Infinity;
     cands.forEach(function (c) {
@@ -1255,23 +1356,27 @@
       var score = along + across * 2;
       if (score < bestScore) { bestScore = score; best = c; }
     });
-    if (best) { try { best.focus({ preventScroll: true }); } catch (e) { best.focus(); } }
+    return best;
   }
 
   var KEY = {
     Enter: 'ok', Select: 'ok', Accept: 'ok', ' ': 'ok', MediaPlayPause: 'playpause', MediaPlay: 'playpause', MediaPause: 'playpause',
     ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Left: 'left', Right: 'right', Up: 'up', Down: 'down',
-    Escape: 'back', Backspace: 'back', GoBack: 'back', BrowserBack: 'back', MediaTrackNext: 'next', MediaTrackPrevious: 'previous'
+    Escape: 'back', Backspace: 'back', GoBack: 'back', BrowserBack: 'back', MediaTrackNext: 'next', MediaTrackPrevious: 'previous',
+    MediaRewind: 'rewind', MediaFastForward: 'forward'
   };
-  var KEYCODE = { 13: 'ok', 37: 'left', 38: 'up', 39: 'right', 40: 'down', 8: 'back', 27: 'back', 461: 'back', 10009: 'back', 179: 'playpause', 176: 'next', 177: 'previous' };
+  var KEYCODE = { 13: 'ok', 37: 'left', 38: 'up', 39: 'right', 40: 'down', 8: 'back', 27: 'back', 461: 'back', 10009: 'back', 179: 'playpause', 176: 'next', 177: 'previous', 412: 'rewind', 417: 'forward' };
 
   function onKey(e) {
     var k = KEY[e.key] || KEYCODE[e.keyCode];
     if (!k) return;
     e.preventDefault();
-    // Held keys repeat and some remotes send a key twice: one action per press, at most every 0.7 s (Spool D-113).
-    if (e.repeat) return;
     var t = now();
+    if (S.bar) S.bar.until = t + BAR_HIDE_MS;   // D-89: any key press keeps the bar up
+    // Held keys repeat and some remotes send a key twice: one action per press, at most every 0.7 s (Spool D-113).
+    // D-89: except Left/Right held on the bar's timeline, which keep seeking at that same 0.7 s rate.
+    var scrubbing = !!S.bar && document.activeElement === $('barScrub') && (k === 'left' || k === 'right');
+    if (e.repeat && !scrubbing) return;
     if (t - S.lastKeyAt < T.KEY_THROTTLE_MS) return;
     S.lastKeyAt = t;
     S.lastAction = k;
@@ -1293,12 +1398,18 @@
     }
     var mode = S.screen === 'play' ? tilesMode() : null;
     if (mode) {
+      // D-89: the remote's rewind and fast-forward seek the tile with sound, at either level.
+      if (k === 'rewind' || k === 'forward') { send('key', { action: 'seekBy', n: k === 'rewind' ? -10 : 10 }); render(); return; }
+      if (S.bar && !S.touch) { barKey(k); render(); return; }
       var tiles = tileEls.map(function (x) { return x.btn; });
+      var i = tiles.indexOf(document.activeElement);
       if (k === 'ok') {
-        var i = tiles.indexOf(document.activeElement);
         if (i < 0) i = S.tiles.focused;
-        chooseTile(i);
+        // D-89: OK on the tile that already has sound opens its controls; on another tile, gives that tile the sound.
+        if (i === S.tiles.audio && i === S.tiles.focused && !S.touch) openBar(i);
+        else chooseTile(i);
       } else if (k === 'back') send('key', { action: 'back' });
+      else if (k === 'down' && i >= 0 && !nearest(tiles[i], 'down', tiles)) openBar(i);   // the bottom row: down to the bar
       else moveFocus(k, tiles);
       render();
       return;
@@ -1332,6 +1443,14 @@
     if (pState() === 'PAUSED') { S.pausedLocally = false; player.play(); } else { S.pausedLocally = true; player.pause(); }
   });
   $('hubNext').addEventListener('click', function () { send('key', { action: 'next' }); });
+  // D-89: the tiles' control bar; each button is one key to the phone, which answers with tiles and the session.
+  $('barToggle').addEventListener('click', function () { send('key', { action: 'toggle' }); });
+  $('barBack').addEventListener('click', function () { send('key', { action: 'seekBy', n: -10 }); });
+  $('barFwd').addEventListener('click', function () { send('key', { action: 'seekBy', n: 10 }); });
+  $('barJump').addEventListener('click', function () { send('key', { action: 'jumpLive' }); });
+  $('barMute').addEventListener('click', function () { send('key', { action: 'mute' }); });
+  $('barOthers').addEventListener('click', function () { send('key', { action: 'othersPause' }); });
+  $('barFull').addEventListener('click', function () { send('key', { action: 'fill' }); closeBar(); });
   $('hubTrack').addEventListener('click', function (e) {
     if (!player) return;
     var r = $('hubTrack').getBoundingClientRect();

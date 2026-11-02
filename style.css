@@ -120,6 +120,37 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .tile .status .st-time { font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
 body.ov-hidden .tile .info { opacity: 0; }
 .tile .info { transition: opacity 0.4s ease; }
+/* D-89 chips top-right (R-18): paused, and muted on the tile with sound; Ink glyphs on the 75% scrim, never red or amber.
+   The title pill gives way to them. */
+.tile .chips { position: absolute; right: var(--sr, 16px); top: var(--st, 14px); display: flex; gap: 6px; }
+.tile .chip { width: 38px; height: 32px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; }
+.tile.small .chip { width: 34px; height: 28px; }
+.tile.chips-1 .name, .tile.chips-1 .info { max-width: calc(100% - var(--sl, 16px) - var(--sr, 16px) - 46px); }
+.tile.chips-2 .name, .tile.chips-2 .info { max-width: calc(100% - var(--sl, 16px) - var(--sr, 16px) - 90px); }
+
+/* ---- tiles, controls level (D-89): the bar for the tile with sound, inside title safe ------------------------------ */
+.bar { position: absolute; left: 48px; right: 48px; bottom: 28px; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; border-radius: 18px; background: var(--surface); }
+.bar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 0 4px; }
+.bar-head .bar-title { min-width: 0; font: 700 calc(22px * var(--scale)) / calc(26px * var(--scale)) var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-head .bar-time { flex: none; margin-left: auto; font-size: calc(20px * var(--scale)); color: var(--bright-mono); }
+.bar-row { display: flex; align-items: center; gap: 8px; }
+.bar-btn { flex: none; height: 48px; padding: 0 12px; border-radius: 999px; background: var(--raised); color: var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; font: 600 calc(18px * var(--scale)) var(--body); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.bar-btn.mono { font-family: var(--mono); font-weight: 500; }
+.bar-round { width: 48px; padding: 0; }
+.bar .i-play, .bar .i-muted { display: none; }
+.bar.is-paused .i-play, .bar.is-muted .i-muted { display: block; }
+.bar.is-paused .i-pause, .bar.is-muted .i-sound { display: none; }
+.bar-scrub { flex: 1 1 64px; min-width: 64px; height: 48px; padding: 0 16px; border-radius: 999px; display: flex; align-items: center; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.bar-track { flex: 1; height: 6px; border-radius: 3px; background: var(--control); position: relative; }
+.bar-track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 3px; background: var(--lamp); }
+.bar-track .knob { position: absolute; left: 0; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--ink); }
+.bar-scrub:focus .knob { background: var(--lamp); }
+.bar-live { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.bar-head .live-label { flex: none; margin-left: auto; font-size: calc(18px * var(--scale)); }
+.bar-btn.bar-jump { background: transparent; color: var(--live); box-shadow: inset 0 0 0 1.5px var(--live); }
+.bar-btn:focus, .bar-scrub:focus { box-shadow: 0 0 0 3px var(--lamp); transform: scale(1.04); }
+.bar-btn.bar-jump:focus { box-shadow: inset 0 0 0 1.5px var(--live), 0 0 0 3px var(--lamp); }
+body.discreet .bar-title { display: none; }
 
 /* ---- TvDiscreet ----------------------------------------------------------------------------------------------------- */
 .discreet-pill { top: 40px; left: 48px; height: 44px; padding: 0 18px 0 14px; gap: 12px; }

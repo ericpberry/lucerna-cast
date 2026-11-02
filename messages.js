@@ -29,7 +29,8 @@
   S.NextUp = [['title', 'string', ''], ['startsInS', 'int', 15]];
   S.Crop = [['l', 'float', 0], ['t', 'float', 0], ['r', 'float', 1], ['b', 'float', 1]];
   S.TileSlotMsg = [['index', 'int', 0], ['itemId', 'string?', null], ['title', 'string', ''], ['live', 'bool', false],
-    ['url', 'string?', null], ['crop', 'obj:Crop', 'new'], ['zoom', 'float', 1], ['note', 'string?', null]];
+    ['url', 'string?', null], ['crop', 'obj:Crop', 'new'], ['zoom', 'float', 1], ['note', 'string?', null],
+    ['paused', 'bool', false]];
   S.QueueEntry = [['id', 'string', ''], ['title', 'string', ''], ['live', 'bool', false], ['durationMs', 'long?', null]];
 
   var T = {};
@@ -40,7 +41,7 @@
     ['durationMs', 'long?', null], ['thumb', 'string?', null], ['next', 'obj:NextUp?', null], ['index', 'int', 1], ['count', 'int', 1],
     ['subtitleOffsetMs', 'long', 0]];
   T.tiles = [['seq', 'long', 0], ['layout', 'string', 'two'], ['slots', 'list:TileSlotMsg', 'new'], ['focused', 'int', 0],
-    ['audio', 'int', 0], ['mode', 'string', 'single']];
+    ['audio', 'int', 0], ['mode', 'string', 'single'], ['muted', 'bool', false], ['othersPause', 'bool', false]];
   T.snap = [['seq', 'long', 0], ['tile', 'int', 0], ['jpeg', 'string?', null], ['w', 'int', 0], ['h', 'int', 0], ['at', 'long', 0]];
   T.snapUrl = [['seq', 'long', 0], ['tile', 'int', 0], ['url', 'string', '']];
   T.status = [['seq', 'long', 0], ['paused', 'bool', false], ['relayState', 'string', 'ok'], ['behindLiveS', 'float?', null]];

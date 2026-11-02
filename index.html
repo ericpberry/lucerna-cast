@@ -49,6 +49,23 @@
     <!-- Tiles: Focus + motion snapshots (TvFocus), and Phone combines chrome (R4, R5) -->
     <section id="tiles" class="tiles" hidden></section>
 
+    <!-- Tiles, controls level (D-89): the bar for the tile with sound. Down from a bottom-row tile, or OK on the tile
+         that already has sound, opens it; Up or Back closes it; it hides after 5 s without a key press. Every button
+         sends a key to the phone, which answers with the new tile state. -->
+    <nav id="bar" class="bar" hidden>
+      <div class="bar-head"><span class="bar-title" id="barTitle"></span><span class="mono bar-time" id="barTime"></span><span class="live-label" id="barLive"><i></i>LIVE</span></div>
+      <div class="bar-row">
+        <button class="bar-btn bar-round" id="barToggle" type="button" aria-label="Pause"><svg class="i-pause" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg><svg class="i-play" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg></button>
+        <button class="bar-btn mono" id="barBack" type="button" aria-label="Back 10 seconds">−10 s</button>
+        <button class="bar-scrub" id="barScrub" type="button" aria-label="Timeline"><span class="bar-track"><span class="fill" id="barScrubFill"></span><span class="knob" id="barKnob"></span></span></button>
+        <div class="bar-live" id="barLiveBox"><button class="bar-btn bar-jump" id="barJump" type="button">Jump to live</button></div>
+        <button class="bar-btn mono" id="barFwd" type="button" aria-label="Forward 10 seconds">+10 s</button>
+        <button class="bar-btn" id="barMute" type="button"><svg class="i-sound" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg><svg class="i-muted" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M22 9l-6 6M16 9l6 6"></path></svg><span id="barMuteLabel">Mute</span></button>
+        <button class="bar-btn" id="barOthers" type="button">Others: Keep playing</button>
+        <button class="bar-btn" id="barFull" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>Full screen</button>
+      </div>
+    </nav>
+
     <!-- Playing a single video: the title overlay that fades (TvFocus without tiles) -->
     <section id="ov" class="ov">
       <div class="shade"></div>
