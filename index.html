@@ -43,7 +43,7 @@
         <img class="wordmark" src="lucerna-wordmark-dark.svg" alt="lucerna">
       </div>
       <p class="hint">Ready to play from Lucerna on your phone</p>
-      <div class="foot" id="idleFoot"><span id="idleTv"></span><span>Nothing is shown here until you press play</span></div>
+      <div class="foot" id="idleFoot"><span id="idleTv"></span><span>No history is kept on this TV</span></div>
     </section>
 
     <!-- Tiles: Focus + motion snapshots (TvFocus), and Phone combines chrome (R4, R5) -->
@@ -54,7 +54,7 @@
          one. Down from a bottom-row tile, or OK on the tile that already has sound, opens it on Play/Pause; Back closes
          it; it hides after 5 s without a key press. Every button sends a key to the phone. -->
     <nav id="bar" class="bar" hidden>
-      <div class="bar-title" id="barTitle"></div>
+      <div class="bar-title"><span id="barTitle"></span><span class="bar-site" id="barSite"></span></div>
       <button class="bar-progress" id="barScrub" type="button" aria-label="Timeline"><span class="bar-track"><span class="fill" id="barScrubFill"></span><span class="knob" id="barKnob"></span></span></button>
       <div class="bar-row">
         <button class="bar-icon" id="barToggle" type="button" aria-label="Pause" data-tip="Pause"><svg class="i-pause" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg><svg class="i-play" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M8 5l11 7-11 7z"></path></svg></button>
@@ -62,6 +62,7 @@
         <span class="live-label" id="barLive"><i></i>LIVE</span>
         <span class="bar-gap"></span>
         <button class="bar-icon" id="barJump" type="button" aria-label="Jump to live" data-tip="Jump to live"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l8 7-8 7z"></path><path d="M18 5v14"></path></svg></button>
+        <button class="bar-icon" id="barNext" type="button" aria-label="Next" data-tip="Next"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5l9 7-9 7z"></path><path d="M18 5v14"></path></svg></button>
         <button class="bar-icon" id="barMute" type="button" aria-label="Mute" data-tip="Mute"><svg class="i-sound" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg><svg class="i-muted" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M22 9l-6 6M16 9l6 6"></path></svg></button>
         <button class="bar-icon" id="barOthers" type="button" aria-label="Others keep playing" data-tip="Others keep playing"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="8.5" height="14" rx="1.5"></rect><rect x="13" y="5" width="8.5" height="14" rx="1.5"></rect><path class="i-others-pause" d="M16 9.5v5M18.5 9.5v5"></path></svg></button>
         <button class="bar-icon" id="barFull" type="button" aria-label="Full screen" data-tip="Full screen"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg></button>
@@ -81,6 +82,8 @@
     <!-- TvDiscreet -->
     <!-- D-94: Back with nothing left to back out of asks once; Back again within 3 s closes the TV page. -->
     <div id="exitHint" class="pill exit-hint" role="status" hidden>Press Back again to exit</div>
+    <!-- D-96: the grid's keys, as the TV app's hint bar says them; shown when tiles start and after a key on the grid. -->
+    <div id="gridHint" class="pill grid-hint" hidden><kbd class="mono">OK</kbd><span>sound and focus</span><kbd class="mono">&#9660;</kbd><span>controls</span></div>
     <div id="discreetPill" class="pill discreet-pill" hidden>
       <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect><path d="M11 18.5h2"></path></svg></span>
       <span class="txt">Playing from a phone</span>

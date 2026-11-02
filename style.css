@@ -65,7 +65,7 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; font: 600 calc(18px * var(--scale)) var(--body); transition: transform 0.15s ease, box-shadow 0.15s ease; }
 .btn.primary { background: var(--lamp); color: var(--on-lamp); }
 .btn.quiet { background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink); }
-.btn.big:focus { box-shadow: 0 0 0 3px var(--lamp); transform: scale(1.04); }
+.btn.big:focus { box-shadow: 0 0 0 3px var(--ink); transform: scale(1.04); }   /* D-96: focus is Ink on the TV (amber is sound and progress) */
 .thumb { position: relative; overflow: hidden; border-radius: 10px; background: #3A3326; }
 .thumb img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; }
 .card-title { font-family: var(--display); font-weight: 700; font-size: calc(22px * var(--scale)); line-height: calc(26px * var(--scale)); text-wrap: balance; }
@@ -97,10 +97,16 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .tile .frames img { position: absolute; left: 0; top: 0; transform-origin: 0 0; opacity: 0; transition: opacity 0.12s linear; }
 .tile .frames img.on { opacity: 1; }
 .tile .ring { position: absolute; left: 0; top: 0; right: 0; bottom: 0; border-radius: 10px; pointer-events: none; }
-.tile:focus .ring { box-shadow: inset 0 0 0 2px var(--lamp); }
+.tile:focus .ring { box-shadow: inset 0 0 0 3px var(--ink); }
 .tile.snap:focus { transform: scale(1.04); }
 /* One label rule on both TV surfaces (R-18): title pill top-left, LIVE or time pill bottom-left, chips bottom-right; all on
    a 75% black scrim; insets (--sl/--st/--sr/--sb, set per tile) keep them inside the 5% title-safe area of the frame. */
+/* D-96: the tile with sound: a Lamp pill with the speaker (as the TV app and the phone), never a second, bigger card. */
+.tile .name .spk { display: none; }
+.tile .name.sound { background: var(--lamp); color: var(--on-lamp); display: inline-flex; align-items: center; gap: 6px; }
+.tile .name.sound .spk { display: inline-flex; }
+.tile .name.sound.muted .spk { opacity: 0.55; }
+.tile .name .nt { overflow: hidden; text-overflow: ellipsis; }
 .tile .name { position: absolute; left: var(--sl, 10px); top: var(--st, 10px); max-width: calc(100% - var(--sl, 10px) - var(--sr, 10px)); padding: 3px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); font: 600 calc(18px * var(--scale)) var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The frame-rate chip sits bottom-right (R-53: at 18px it no longer fits beside the title). */
 .tile .fps { position: absolute; right: var(--sr, 8px); bottom: var(--sb, 8px); font: 500 calc(18px * var(--scale)) var(--mono); color: var(--tertiary); background: rgba(0, 0, 0, 0.75); padding: 2px 8px; border-radius: 6px; }
@@ -143,7 +149,7 @@ body.ov-hidden .tile .info { opacity: 0; }
 .bar-gap { flex: 1; }
 .bar-icon { position: relative; flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; background: transparent; color: var(--ink);
   display: inline-flex; align-items: center; justify-content: center; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease; }
-.bar-icon:focus { background: rgba(244, 240, 232, 0.14); box-shadow: 0 0 0 3px var(--lamp); transform: scale(1.04); }
+.bar-icon:focus { background: rgba(244, 240, 232, 0.14); box-shadow: 0 0 0 3px var(--ink); transform: scale(1.04); }
 /* The focused button says what it does, just above it (the last one's label keeps to the right edge). */
 .bar-icon:focus::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
   white-space: nowrap; padding: 3px 10px; border-radius: 6px; background: rgba(11, 10, 9, 0.9); color: var(--ink); font: 500 calc(14px * var(--scale)) / calc(20px * var(--scale)) var(--body); }
@@ -154,6 +160,12 @@ body.ov-hidden .tile .info { opacity: 0; }
 .bar.is-paused .i-play, .bar.is-muted .i-muted, .bar.others-pause .i-others-pause { display: block; }
 .bar.is-paused .i-pause, .bar.is-muted .i-sound { display: none; }
 body.discreet .bar-title { display: none; }
+.bar-site { margin-left: 10px; font-weight: 400; color: var(--secondary); }
+.bar-site:empty { display: none; }
+.grid-hint { left: 50%; bottom: 20px; transform: translateX(-50%); height: 44px; padding: 0 18px; gap: 10px; font: 500 calc(17px * var(--scale)) var(--body); color: var(--secondary); white-space: nowrap; z-index: 15; }
+.grid-hint kbd { padding: 2px 8px; border-radius: 6px; background: var(--raised); color: var(--ink); font-size: calc(15px * var(--scale)); }
+.grid-hint span + kbd { margin-left: 8px; }
+body.bar-open .grid-hint, body.bar-open #ov, body.bar-open #discreetPill { display: none; }   /* the bar says it all */
 body.bar-open .tile.video .status { display: none; }   /* the bar shows the time (or LIVE) */
 
 /* ---- TvDiscreet ----------------------------------------------------------------------------------------------------- */

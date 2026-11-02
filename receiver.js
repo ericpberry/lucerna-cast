@@ -568,7 +568,12 @@
         info.appendChild(el('span', 't-title'));
         info.appendChild(el('span', 't-sub'));
         b.appendChild(info);
-        b.appendChild(el('span', 'name'));
+        var nm = el('span', 'name');
+        var spk = el('i', 'spk');
+        spk.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>';
+        nm.appendChild(spk);
+        nm.appendChild(el('span', 'nt'));
+        b.appendChild(nm);
         var status = el('span', 'status');
         status.appendChild(liveLabel());
         status.appendChild(el('span', 'st-time mono'));
@@ -628,8 +633,11 @@
     tileEls.forEach(function (t, i) {
       var slot = t.slot;
       var title = S.hello.discreet ? '' : slot.title;
-      var showInfo = t.isVideo || mode === 'combines';
-      show(t.info, showInfo);
+      // D-96: one label for every tile, as on the TV app and the phone: a name pill, Lamp with the speaker on the tile with
+      // sound (the big title card is gone).
+      var showInfo = false;
+      var sound = S.tiles.audio === i && !!slot.itemId;
+      show(t.info, false);
       show(t.btn.querySelector('.shade'), false);   // the labels carry their own scrim (R-18)
       // LIVE, or the time on the video tile, bottom-left on its own scrim pill: never faded, never moved (R-18).
       var dur = pDuration();
@@ -644,8 +652,11 @@
       if (showInfo && slotItem && slotItem.site && !S.hello.discreet) subParts.push(slotItem.site);
       if (S.tiles.audio === i) subParts.push(S.tiles.muted ? 'muted' : 'sound on');
       setText(t.info.querySelector('.t-sub'), subParts.join(' · '));
-      show(t.name, !showInfo && !!title);
-      setText(t.name, title);
+      var nameText = title || (sound && t.isVideo && !S.hello.discreet ? curTitle() : '');
+      show(t.name, !!nameText || sound);
+      setText(t.name.querySelector('.nt'), nameText);
+      cls(t.name, 'sound', sound);
+      cls(t.name, 'muted', sound && !!S.tiles.muted);
       var snap = mode === 'focus' && !t.isVideo && !!(slot.itemId || slot.color);
       // m11: the refresh rate is a diagnostic (?debug=1), not something to read on a TV.
       show(t.fps, snap && DEBUG);
@@ -1123,6 +1134,7 @@
 
     cls(body, 'tiles-on', playing && !!mode);
     show($('exitHint'), t < S.exitUntil);
+    show($('gridHint'), playing && mode === 'focus' && !S.touch && !S.bar && !S.starting && t < S.overlayUntil && t >= S.exitUntil);
 
     // buffering (after a short delay, so a quick hiccup doesn't flash)
     var buffering = playing && (st === 'BUFFERING' || S.loading);
@@ -1165,7 +1177,7 @@
     // tiles; the first remote press must land on a focused button (Spool D-116)
     renderTiles();
     if (playing && mode && !S.touch && !$('tiles').contains(document.activeElement) && !S.starting && overlayButtons().length === 0) focusTileButton(S.tiles.focused);
-    renderBar(playing && !!mode && !S.touch && !lost && !S.starting, st, pos, dur);
+    renderBar(playing && (!!mode || !!(S.bar && S.bar.single)) && !S.touch && !lost && !S.starting, st, pos, dur);
 
     // buffering
     show($('buffering'), showBuffering && !S.starting);
@@ -1265,12 +1277,13 @@
   function barSlot() { return S.tiles ? S.tiles.slots[S.tiles.audio] || S.tiles.slots[S.tiles.focused] || null : null; }
   /** The bar's buttons, left to right (only the visible ones); the progress line is the row above them (D-92). */
   function barButtons() {
-    return ['barToggle', 'barJump', 'barMute', 'barOthers', 'barFull']
+    return ['barToggle', 'barJump', 'barNext', 'barMute', 'barOthers', 'barFull']
       .map(function (id) { return $(id); }).filter(function (b) { return b.offsetParent !== null; });
   }
+  /** [from] is the tile to return to; -1 opens the bar for one video (D-96: the same bar as tiles). */
   function openBar(from) {
-    if (S.touch || !tilesMode() || S.screen !== 'play') return;
-    S.bar = { from: from, until: now() + BAR_HIDE_MS, last: null };
+    if (S.touch || S.screen !== 'play' || (from >= 0 && !tilesMode())) return;
+    S.bar = { from: from, until: now() + BAR_HIDE_MS, last: null, single: from < 0 };
     render();
     focusFirst([$('barToggle')]);   // D-92: on Play/Pause, as YouTube
   }
@@ -1279,26 +1292,37 @@
     var from = S.bar.from;
     S.bar = null;
     render();
-    if (S.tiles) focusTileButton(S.tiles.slots[from] ? from : S.tiles.focused);
+    if (from >= 0 && S.tiles) focusTileButton(S.tiles.slots[from] ? from : S.tiles.focused);
+    else if (document.activeElement && $('bar').contains(document.activeElement)) document.activeElement.blur();
   }
   function tip(b, words) { b.setAttribute('aria-label', words); b.setAttribute('data-tip', words); }
   function renderBar(on, st, pos, dur) {
     var bar = $('bar');
-    if (S.bar && (!on || now() > S.bar.until)) { closeBar(); return; }
+    // A bar for one video ends when tiles start, and a tiles bar when tiles end (the other kind opens fresh).
+    var wrongKind = S.bar && !!S.bar.single === !!tilesMode();
+    if (S.bar && (!on || now() > S.bar.until || wrongKind)) { closeBar(); return; }
     show(bar, on && !!S.bar);
     cls(body, 'bar-open', on && !!S.bar);
     if (!S.bar || !on) return;
-    var slot = barSlot();
-    var live = !!(slot && slot.live);
+    var single = !!S.bar.single;
+    var slot = single ? null : barSlot();
+    var live = single ? !!S.live : !!(slot && slot.live);
     setText($('barTitle'), S.hello.discreet ? '' : (slot && slot.title) || curTitle());
+    setText($('barSite'), single && !S.hello.discreet ? curSite() || '' : '');
+    show($('barMute'), !single);
+    show($('barOthers'), !single);
+    show($('barFull'), !single);
+    show($('barNext'), single && !!(S.queue && S.queue.length));
     var isPaused = st === 'PAUSED' || !!(slot && slot.paused);
     cls(bar, 'is-paused', isPaused);
     cls(bar, 'is-live', live);
-    cls(bar, 'is-muted', !!S.tiles.muted);
-    cls(bar, 'others-pause', !!S.tiles.othersPause);
+    cls(bar, 'is-muted', !single && !!S.tiles.muted);
+    cls(bar, 'others-pause', !single && !!S.tiles.othersPause);
     tip($('barToggle'), isPaused ? 'Play' : 'Pause');
-    tip($('barMute'), S.tiles.muted ? 'Unmute' : 'Mute');
-    tip($('barOthers'), S.tiles.othersPause ? 'Others pause' : 'Others keep playing');
+    if (!single) {
+      tip($('barMute'), S.tiles.muted ? 'Unmute' : 'Mute');
+      tip($('barOthers'), S.tiles.othersPause ? 'Others pause' : 'Others keep playing');
+    }
     show($('barJump'), live);
     show($('barLive'), live);
     var hours = dur >= 3600;
@@ -1456,9 +1480,13 @@
       return;
     }
     if (S.screen === 'play') {
-      if (k === 'ok') send('key', { action: 'toggle' });
-      else if (k === 'right') send('key', { action: 'next' });
-      else if (k === 'left') send('key', { action: 'previous' });
+      // D-96, YouTube style: OK pauses (or plays) and shows the bar on Play/Pause; Down shows it; Left/Right show it on
+      // the progress line and skip 10 s. Previous/next are the remote's media keys and the bar's Next.
+      if (k === 'rewind' || k === 'forward') { send('key', { action: 'seekBy', n: k === 'rewind' ? -10 : 10 }); render(); return; }
+      if (S.bar && !S.touch) { barKey(k); render(); return; }
+      if (k === 'ok') { send('key', { action: 'toggle' }); openBar(-1); }
+      else if (k === 'down') openBar(-1);
+      else if (k === 'left' || k === 'right') { openBar(-1); focusFirst([$('barScrub')]); send('key', { action: 'seekBy', n: k === 'left' ? -10 : 10 }); }
       // A tile filling the screen goes back to the grid (the phone knows; its tiles answer clears the hint).
       else if (k === 'back') { send('key', { action: 'back' }); backToExit(); }
     } else if (k === 'back' && S.screen !== 'end') backToExit();
@@ -1488,6 +1516,7 @@
   // D-89: the tiles' control bar; each button is one key to the phone, which answers with tiles and the session.
   $('barToggle').addEventListener('click', function () { send('key', { action: 'toggle' }); });
   $('barJump').addEventListener('click', function () { send('key', { action: 'jumpLive' }); });
+  $('barNext').addEventListener('click', function () { send('key', { action: 'next' }); });
   $('barMute').addEventListener('click', function () { send('key', { action: 'mute' }); });
   $('barOthers').addEventListener('click', function () { send('key', { action: 'othersPause' }); });
   $('barFull').addEventListener('click', function () { send('key', { action: 'fill' }); closeBar(); });
