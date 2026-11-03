@@ -107,7 +107,7 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .tile .name.sound .spk { display: inline-flex; }
 .tile .name.sound.muted .spk { opacity: 0.55; }
 .tile .name .nt { overflow: hidden; text-overflow: ellipsis; }
-.tile .name { position: absolute; left: var(--sl, 10px); top: var(--st, 10px); max-width: calc(100% - var(--sl, 10px) - var(--sr, 10px)); padding: 3px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); font: 600 calc(18px * var(--scale)) var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .name { position: absolute; left: var(--sl, 10px); top: var(--st, 10px); max-width: calc(100% - var(--sl, 10px) - var(--sr, 10px)); padding: 3px 11px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); font: 600 calc(15px * var(--scale)) var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* The frame-rate chip sits bottom-right (R-53: at 18px it no longer fits beside the title). */
 .tile .fps { position: absolute; right: var(--sr, 8px); bottom: var(--sb, 8px); font: 500 calc(18px * var(--scale)) var(--mono); color: var(--tertiary); background: rgba(0, 0, 0, 0.75); padding: 2px 8px; border-radius: 6px; }
 .tile .shade { display: none; }
@@ -121,9 +121,15 @@ body.sub-plain video::cue { background: transparent; text-shadow: 0 0 4px #000, 
 .tile.small .info { padding: 4px 10px; border-radius: 12px; }
 .tile.small .t-title { font-size: calc(18px * var(--scale)); line-height: calc(22px * var(--scale)); }
 .tile.small .t-sub { font-size: calc(18px * var(--scale)); }
-.tile .status { position: absolute; left: var(--sl, 16px); bottom: var(--sb, 14px); display: inline-flex; align-items: center; gap: 10px; padding: 4px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); }
-.tile .status .live-label { font-size: calc(18px * var(--scale)); }
-.tile .status .st-time { font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
+.tile .status { position: absolute; left: var(--sl, 16px); bottom: var(--sb, 14px); display: inline-flex; align-items: center; gap: 8px; padding: 2px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); }
+.tile .status .live-label { font-size: calc(15px * var(--scale)); gap: 6px; }
+.tile .status .st-time { font-size: calc(15px * var(--scale)); color: var(--bright-mono); }
+/* D-99: with a remote, tile labels show with the control bar only; the tile with sound keeps its speaker (its title is on
+   top with the bar). A touch display has no bar: its labels stay. */
+body:not(.touch-ui):not(.bar-open) .tile .name:not(.sound), body:not(.touch-ui):not(.bar-open) .tile .status { display: none; }
+body:not(.touch-ui) .tile .name.sound .nt { display: none; }
+body:not(.touch-ui) .tile .name.sound { padding: 5px 9px; }
+body.bar-open .tile.has-sound .status { display: none; }
 body.ov-hidden .tile .info { opacity: 0; }
 .tile .info { transition: opacity 0.4s ease; }
 /* D-89 chips top-right (R-18): paused, and muted on the tile with sound; Ink glyphs on the 75% scrim, never red or amber.
@@ -137,17 +143,17 @@ body.ov-hidden .tile .info { opacity: 0; }
 /* ---- the control bar (D-98, YouTube style; D-89/D-92 keys): title top-left, times over a thin line, round buttons ---- */
 .bar { position: absolute; inset: 0; z-index: 12; pointer-events: none; }
 .bar-shade { position: absolute; left: 0; right: 0; }
-.bar-shade.top { top: 0; height: 170px; background: linear-gradient(180deg, rgba(11, 10, 9, 0.88), rgba(11, 10, 9, 0.55) 45%, rgba(11, 10, 9, 0)); }
-.bar-shade.bottom { bottom: 0; height: 240px; background: linear-gradient(0deg, rgba(11, 10, 9, 0.94), rgba(11, 10, 9, 0.72) 50%, rgba(11, 10, 9, 0)); }
-.bar-head { position: absolute; left: 48px; right: 48px; top: 28px; display: flex; flex-direction: column; gap: 6px; }
-.bar-title { font: 700 calc(30px * var(--scale)) / calc(34px * var(--scale)) var(--display); font-variation-settings: "opsz" 30; color: var(--ink);
+.bar-shade.top { top: 0; height: 130px; background: linear-gradient(180deg, rgba(11, 10, 9, 0.88), rgba(11, 10, 9, 0.55) 45%, rgba(11, 10, 9, 0)); }
+.bar-shade.bottom { bottom: 0; height: 220px; background: linear-gradient(0deg, rgba(11, 10, 9, 0.94), rgba(11, 10, 9, 0.72) 50%, rgba(11, 10, 9, 0)); }
+.bar-head { position: absolute; left: 48px; right: 48px; top: 27px; display: flex; flex-direction: column; gap: 4px; }
+.bar-title { font: 700 calc(24px * var(--scale)) / calc(28px * var(--scale)) var(--display); font-variation-settings: "opsz" 24; color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-sub { display: flex; align-items: center; gap: 12px; font: 400 calc(19px * var(--scale)) / calc(24px * var(--scale)) var(--body); color: var(--secondary); }
+.bar-sub { display: flex; align-items: center; gap: 10px; font: 400 calc(15px * var(--scale)) / calc(20px * var(--scale)) var(--body); color: var(--secondary); }
 .bar-sub #barSite:empty { display: none; }
-.bar-sub .live-label { padding: 2px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); }
-.bar-foot { position: absolute; left: 48px; right: 48px; bottom: 38px; pointer-events: auto; }
-.bar-times { display: flex; justify-content: space-between; height: calc(24px * var(--scale)); margin-bottom: 4px; }
-.bar-times .mono { font-weight: 500; font-size: calc(18px * var(--scale)); color: var(--ink); }
+.bar-sub .live-label { padding: 1px 9px; border-radius: 999px; background: rgba(0, 0, 0, 0.75); font-size: calc(15px * var(--scale)); gap: 6px; }
+.bar-foot { position: absolute; left: 48px; right: 48px; bottom: 30px; pointer-events: auto; transition: transform 0.22s ease; }
+.bar-times { display: flex; justify-content: space-between; height: calc(20px * var(--scale)); margin-bottom: 2px; }
+.bar-times .mono { font-weight: 500; font-size: calc(15px * var(--scale)); color: var(--ink); }
 .bar-progress { width: 100%; height: 22px; padding: 0; background: transparent; display: flex; align-items: center; }
 .bar-track { flex: 1; height: 4px; border-radius: 2px; background: rgba(244, 240, 232, 0.28); position: relative; transition: height 0.15s ease; }
 .bar-track .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: inherit; background: var(--lamp); }
@@ -156,24 +162,44 @@ body.ov-hidden .tile .info { opacity: 0; }
 .bar-progress:focus .bar-track { height: 8px; border-radius: 4px; }
 .bar-progress:focus .knob { opacity: 1; }
 .bar.is-live .knob { display: none; }
-.bar-row { position: relative; height: 64px; margin-top: 14px; }
+.bar-row { position: relative; height: 52px; margin-top: 8px; }
 .bar-grp { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; gap: 8px; }
 .bar-grp.left { left: 0; }
-.bar-grp.center { left: 50%; transform: translateX(-50%); gap: 14px; }
+.bar-grp.center { left: 50%; transform: translateX(-50%); gap: 12px; }
 .bar-grp.right { right: 0; }
-.bar-icon { position: relative; flex: none; width: 48px; height: 48px; padding: 0; border-radius: 50%; background: rgba(244, 240, 232, 0.10); color: var(--ink);
+.bar-icon { position: relative; flex: none; width: 36px; height: 36px; padding: 0; border-radius: 50%; background: rgba(244, 240, 232, 0.10); color: var(--ink);
   display: inline-flex; align-items: center; justify-content: center; transition: background 0.15s ease, color 0.15s ease; }
 #barJump .live-dot { fill: var(--live); stroke: none; }   /* Jump to live: the live dot, then to the edge (red: live only) */
-.bar-icon.big { width: 64px; height: 64px; background: rgba(244, 240, 232, 0.16); }
+.bar-icon.big { width: 50px; height: 50px; background: rgba(244, 240, 232, 0.16); }
+.bar-icon svg { width: 20px; height: 20px; }
+.bar-icon.big svg { width: 24px; height: 24px; }
 .bar-icon:focus { background: var(--ink); color: var(--on-lamp); }
 /* The focused button says what it does, just under it (the last one's label keeps to the right edge). */
-.bar-icon:focus::after { content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  white-space: nowrap; padding: 2px 10px; border-radius: 8px; background: rgba(11, 10, 9, 0.85); color: var(--ink); font: 600 calc(18px * var(--scale)) / calc(24px * var(--scale)) var(--body); }
+.bar-icon:focus::after { content: attr(data-tip); position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  white-space: nowrap; padding: 1px 8px; border-radius: 7px; background: rgba(11, 10, 9, 0.85); color: var(--ink); font: 600 calc(15px * var(--scale)) / calc(20px * var(--scale)) var(--body); }
 .bar-grp.right .bar-icon:last-child:focus::after { left: auto; right: 0; transform: none; }
 .bar-grp.left .bar-icon:first-child:focus::after { left: 0; transform: none; }
 .bar .i-play, .bar .i-muted, .bar .i-others-pause { display: none; }
 .bar.is-paused .i-play, .bar.is-muted .i-muted, .bar.others-pause .i-others-pause { display: block; }
 .bar.is-paused .i-pause, .bar.is-muted .i-sound { display: none; }
+/* D-99 Lineup: the tile with sound fills the screen; the others are cards in a row under the bar (YouTube's related row),
+   peeking while the bar is up and fully shown once Down moves into them. */
+body.lineup .tile.big { border-radius: 0; }
+body.lineup .tile.big .ring, body.lineup .tile.big .name, body.lineup .tile.big .status, body.lineup .tile.big .chips { display: none; }
+body.lineup .tile.card { border-radius: 10px; transition: top 0.22s ease, opacity 0.2s ease, transform 0.15s ease; }
+body.lineup .tile.card .name { display: none; }
+body.lineup .tile.card .status { left: auto; right: 6px; bottom: 6px; padding: 0 7px; border-radius: 6px; background: rgba(11, 10, 9, 0.82); }
+body.lineup:not(.bar-open) .tile.card, body.lineup:not(.bar-open) .card-cap { opacity: 0; visibility: hidden; }
+body.lineup .tile.card:focus { transform: scale(1.04); transform-origin: 50% 100%; }
+body.lineup.bar-open .bar-foot { transform: translateY(-70px); }
+body.lineup.lineup-row .bar-foot { transform: translateY(-170px); }
+body.lineup.lineup-row .bar-icon:focus::after { display: none; }
+.card-cap { position: absolute; display: flex; flex-direction: column; gap: 2px; pointer-events: none; transition: top 0.22s ease, opacity 0.2s ease; z-index: 13; }
+.card-cap .ct { font: 600 calc(15px * var(--scale)) / calc(19px * var(--scale)) var(--body); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-cap .cs { font: 400 calc(15px * var(--scale)) / calc(19px * var(--scale)) var(--body); color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-cap .cs:empty { display: none; }
+body.lineup.bar-open #tiles { z-index: 13; }
+body.lineup.bar-open #tiles .tile.big { z-index: -1; }
 /* With tiles the grid makes room (tileRects) and the tile with sound keeps only its speaker: the title is on top. */
 body.bar-open.bar-tiles .tile .name.sound .nt { display: none; }
 body.discreet .bar-title { display: none; }

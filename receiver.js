@@ -426,8 +426,8 @@
   }
 
   // ---- tiles (R4, R5, T1, T2) ---------------------------------------------------------------------------------------------
-  var LAYOUTS = ['two', 'three', 'four', 'onePlusThree'];
-  var TILE_COUNT = { two: 2, three: 3, four: 4, onePlusThree: 4 };
+  var LAYOUTS = ['two', 'three', 'four', 'onePlusThree', 'lineup'];   // lineup: D-99
+  var TILE_COUNT = { two: 2, three: 3, four: 4, onePlusThree: 4, lineup: 4 };
 
   /** C-B4/C-B5: no tiles at all: the grid, its pictures and snapshot addresses go, the video fills the screen again. */
   function resetTiles() {
@@ -467,7 +467,7 @@
       var l = clamp(c.l, 0, 1), t = clamp(c.t, 0, 1), r = clamp(c.r, 0, 1), b = clamp(c.b, 0, 1);
       if (r - l < 0.05) { l = 0; r = 1; }
       if (b - t < 0.05) { t = 0; b = 1; }
-      return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color, note: s.note ? M.cap(s.note) : '', paused: !!s.paused };
+      return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color, note: s.note ? M.cap(s.note) : '', paused: !!s.paused, site: s.site ? M.cap(s.site) : '' };
     });
     S.exitUntil = 0;   // D-94: Back brought the grid back (a filled tile), it didn't ask to leave
     var before = S.tiles ? S.tiles.slots : [];
@@ -507,14 +507,34 @@
    */
   var TOUCH_BAND = 112;
   function tileRects() {
+    if (isLineup()) return lineupRects();
     // D-98: the open control bar sits under the grid (title above it): the grid makes room rather than being covered.
     if (barUnderGrid()) {
       return layoutRects(S.tiles.layout, view.W, view.H - BAR_HEAD_H - BAR_FOOT_H).map(function (r) { return { x: r.x, y: r.y + BAR_HEAD_H, w: r.w, h: r.h }; });
     }
     return layoutRects(S.tiles.layout, view.W, view.H - (S.touch ? TOUCH_BAND : 0));
   }
-  var BAR_HEAD_H = 84, BAR_FOOT_H = 186;
-  function barUnderGrid() { return !!S.bar && !S.bar.single && !S.touch && tilesMode(); }
+  var BAR_HEAD_H = 76, BAR_FOOT_H = 150;
+  function barUnderGrid() { return !!S.bar && !S.bar.single && !S.touch && tilesMode() && !isLineup(); }
+  /** D-99: Lineup: the tile with sound plays full screen and the others wait as cards in a row under the bar. */
+  function isLineup() { return !!S.tiles && S.tiles.layout === 'lineup' && !!tilesMode() && !S.touch; }
+  var CARD_W = 184, CARD_H = 104, CARD_GAP = 14, CARD_X = 48, CARD_PEEK = 70;
+  function lineupRects() {
+    var W = view.W, H = view.H, out = [], k = 0;
+    var up = !!(S.bar && S.bar.row);
+    var y = up ? H - 30 - 52 - CARD_H : H - CARD_PEEK;   // up: room for the captions; down: the pictures' top peeks
+    S.tiles.slots.forEach(function (slot, i) {
+      if (i === S.tiles.audio) { out[i] = { x: 0, y: 0, w: W, h: H }; return; }
+      if (!slot.itemId) { out[i] = { x: -CARD_W - 40, y: y, w: CARD_W, h: CARD_H }; return; }
+      out[i] = { x: CARD_X + k * (CARD_W + CARD_GAP), y: y, w: CARD_W, h: CARD_H };
+      k++;
+    });
+    return out;
+  }
+  function lineupCards() {
+    if (!isLineup()) return [];
+    return tileEls.filter(function (t, i) { return i !== S.tiles.audio && t.slot && t.slot.itemId; }).map(function (t) { return t.btn; });
+  }
   /** 5% title safe (R-18): text and chips on video never sit closer to the frame edge than this (48 x 27 at 960 x 540). */
   function safeInsets(r, small) {
     var bx = small ? 10 : 16, by = small ? 10 : 14, sx = view.W * 0.05, sy = view.H * 0.05;
@@ -623,11 +643,29 @@
       cls(b, 'small', r.w < 400);
       b.style.background = slot.color && !isVideo && mode === 'focus' ? slot.color : '';
       t.slot = slot; t.rect = r; t.isVideo = isVideo;
+      var lineup = isLineup();
+      cls(b, 'big', lineup && i === S.tiles.audio);
+      cls(b, 'card', lineup && i !== S.tiles.audio);
+      cls(b, 'has-sound', i === S.tiles.audio && !!slot.itemId);
+      // D-99: a card's title and site sit under its picture (outside the tile, which clips).
+      if (!t.cap) {
+        t.cap = el('div', 'card-cap'); t.cap.appendChild(el('span', 'ct')); t.cap.appendChild(el('span', 'cs'));
+        box.appendChild(t.cap);
+      }
+      var capOn = lineup && i !== S.tiles.audio && !!slot.itemId;
+      show(t.cap, capOn);
+      if (capOn) {
+        t.cap.style.left = r.x + 'px'; t.cap.style.top = (r.y + r.h + 8) + 'px'; t.cap.style.width = r.w + 'px';
+        var ci = slot.itemId ? S.items[slot.itemId] : null;
+        setText(t.cap.querySelector('.ct'), S.hello.discreet ? '' : slot.title || '');
+        setText(t.cap.querySelector('.cs'), S.hello.discreet ? '' : slot.site || (ci && ci.site) || '');
+      }
     });
     if (hadFocus || !box.contains(document.activeElement)) focusTileButton(S.tiles.focused);
   }
 
   function focusTileButton(i) {
+    if (isLineup() && !S.bar) { var a = document.activeElement; if (a && a !== body && a.blur) a.blur(); return; }   // D-99: no tile focus in a Lineup
     var t = tileEls[i];
     if (t && !S.touch && !S.bar && overlayButtons().length === 0) { try { t.btn.focus({ preventScroll: true }); } catch (e) { t.btn.focus(); } }
   }
@@ -1186,9 +1224,9 @@
     if (playing && mode && !S.touch && !$('tiles').contains(document.activeElement) && !S.starting && overlayButtons().length === 0) focusTileButton(S.tiles.focused);
     // Back closes it for this pause (then Back again offers the exit); playing again forgets that.
     if (!paused) S.barDismissed = false;
-    var holdBar = paused && !mode && !S.touch && !lost && !S.starting && !resting && !S.barDismissed && S.screen === 'play';
+    var holdBar = paused && (!mode || isLineup()) && !S.touch && !lost && !S.starting && !resting && !S.barDismissed && S.screen === 'play';
     S.barHeld = holdBar;
-    if (holdBar && !S.bar) { S.bar = { from: -1, until: now() + BAR_HIDE_MS, last: null, single: true }; S.barFocus = true; }
+    if (holdBar && !S.bar) { S.bar = { from: -1, until: now() + BAR_HIDE_MS, last: null, single: !mode }; S.barFocus = true; }
     renderBar(playing && (!!mode || !!(S.bar && S.bar.single)) && !S.touch && !lost && !S.starting, st, pos, dur);
     if (S.barFocus && S.bar) { S.barFocus = false; if (!$('bar').contains(document.activeElement)) focusFirst([$('barToggle')]); }
 
@@ -1297,7 +1335,7 @@
   /** [from] is the tile to return to; -1 opens the bar for one video (D-96: the same bar as tiles). */
   function openBar(from) {
     if (S.touch || S.screen !== 'play' || (from >= 0 && !tilesMode())) return;
-    S.bar = { from: from, until: now() + BAR_HIDE_MS, last: null, single: from < 0 };
+    S.bar = { from: from, until: now() + BAR_HIDE_MS, last: null, single: from === -1 };   // -2: a Lineup (D-99)
     render();
     focusFirst([$('barToggle')]);   // D-92: on Play/Pause, as YouTube
   }
@@ -1315,24 +1353,33 @@
     var bar = $('bar');
     // A bar for one video ends when tiles start, and a tiles bar when tiles end (the other kind opens fresh).
     var wrongKind = S.bar && !!S.bar.single === !!tilesMode();
-    if (S.bar && (!on || (now() > S.bar.until && !(S.bar.single && S.barHeld)) || wrongKind)) { closeBar(); return; }
+    if (S.bar && (!on || (now() > S.bar.until && !(S.barHeld && (S.bar.single || isLineup())) && !S.bar.row) || wrongKind)) { closeBar(); return; }
+    cls(body, 'lineup', isLineup());
+    var rowWas = body.classList.contains('lineup-row');
+    cls(body, 'lineup-row', isLineup() && !!S.bar && !!S.bar.row && on);
     var wasUnder = body.classList.contains('bar-tiles');
     show(bar, on && !!S.bar);
     cls(body, 'bar-open', on && !!S.bar);
     cls(body, 'bar-tiles', on && barUnderGrid());
     if (wasUnder !== body.classList.contains('bar-tiles') && tileEls.length && S.tiles) buildTiles(false);   // the grid makes room
+    if (isLineup() && tileEls.length && (rowWas !== body.classList.contains('lineup-row') || S.lineupBuiltOpen !== (on && !!S.bar))) {
+      S.lineupBuiltOpen = on && !!S.bar;
+      buildTiles(false);   // D-99: the row peeks with the bar and rises when Down moves into it
+    }
     if (!S.bar || !on) return;
     var single = !!S.bar.single;
+    var lineup = isLineup();
     var slot = single ? null : barSlot();
     var live = single ? !!S.live : !!(slot && slot.live);
     setText($('barTitle'), S.hello.discreet ? '' : (slot && slot.title) || curTitle());
     var n = single ? 0 : S.tiles.slots.filter(function (x) { return !!x.itemId; }).length;
-    setText($('barSite'), S.hello.discreet ? '' : single ? curSite() || '' : n > 1 ? n + ' videos' : '');
+    var bigItem = !single && slot && slot.itemId ? S.items[slot.itemId] : null;
+    setText($('barSite'), S.hello.discreet ? '' : single ? curSite() || '' : lineup ? [bigItem && bigItem.site, 'Lineup of ' + n].filter(Boolean).join(' · ') : n > 1 ? n + ' videos' : '');
     var it = single ? currentItem() : null;
     show($('barPrev'), single && !!(it && it.index > 1));
     show($('barMute'), !single);
-    show($('barOthers'), !single);
-    show($('barFull'), !single);
+    show($('barOthers'), !single && !lineup);   // D-99: a Lineup plays one video at a time
+    show($('barFull'), !single && !lineup);
     show($('barNext'), single && !!(S.queue && S.queue.length));
     var isPaused = st === 'PAUSED' || !!(slot && slot.paused);
     cls(bar, 'is-paused', isPaused);
@@ -1358,7 +1405,7 @@
     $('barKnob').style.left = (frac * 100).toFixed(2) + '%';
     // A control that went away (the tile turned live, or stopped being live) hands focus to the first one left.
     var a = document.activeElement;
-    if (a !== $('barScrub') && (!bar.contains(a) || a.offsetParent === null)) focusFirst(barButtons());
+    if (a !== $('barScrub') && lineupCards().indexOf(a) < 0 && (!bar.contains(a) || a.offsetParent === null)) focusFirst(barButtons());
   }
   /**
    * Remote keys while the bar is open (D-92, YouTube): Left/Right between the buttons; Up to the progress line, where
@@ -1368,6 +1415,24 @@
     var list = barButtons();
     var cur = document.activeElement;
     if (k === 'back') { closeBar(); return; }
+    // D-99: the Lineup's row: Down from the buttons, Left/Right between cards, OK plays that one big, Up goes back.
+    var cards = lineupCards();
+    if (cards.indexOf(cur) >= 0) {
+      if (k === 'left' || k === 'right') moveFocus(k, cards);
+      else if (k === 'up') { S.bar.row = false; render(); focusFirst([S.bar.last && S.bar.last.offsetParent !== null ? S.bar.last : $('barToggle')]); }
+      else if (k === 'ok') {
+        var ci = tileEls.map(function (t) { return t.btn; }).indexOf(cur);
+        S.bar.row = false;
+        chooseTile(ci);
+        focusFirst([$('barToggle')]);
+      }
+      return;
+    }
+    if (k === 'down' && cards.length && list.indexOf(cur) >= 0) {
+      S.bar.last = cur; S.bar.row = true; render();
+      focusFirst(cards);
+      return;
+    }
     if (cur === $('barScrub')) {
       if (k === 'left' || k === 'right') send('key', { action: 'seekBy', n: k === 'left' ? -10 : 10 });
       else if (k === 'down') focusFirst([S.bar.last && S.bar.last.offsetParent !== null ? S.bar.last : $('barToggle')]);
@@ -1486,6 +1551,17 @@
       return;
     }
     var mode = S.screen === 'play' ? tilesMode() : null;
+    if (mode && isLineup()) {
+      // D-99: a Lineup plays like one video: OK pauses and shows the bar, Down shows it, Left/Right skip 10 s on the line.
+      if (k === 'rewind' || k === 'forward') { send('key', { action: 'seekBy', n: k === 'rewind' ? -10 : 10 }); render(); return; }
+      if (S.bar) { barKey(k); render(); return; }
+      if (k === 'ok') { send('key', { action: 'toggle' }); openBar(-2); }
+      else if (k === 'down') openBar(-2);
+      else if (k === 'left' || k === 'right') { openBar(-2); focusFirst([$('barScrub')]); send('key', { action: 'seekBy', n: k === 'left' ? -10 : 10 }); }
+      else if (k === 'back') backToExit();
+      render();
+      return;
+    }
     if (mode) {
       // D-89: the remote's rewind and fast-forward seek the tile with sound, at either level.
       if (k === 'rewind' || k === 'forward') { send('key', { action: 'seekBy', n: k === 'rewind' ? -10 : 10 }); render(); return; }
