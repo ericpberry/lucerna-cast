@@ -154,7 +154,7 @@ body.ov-hidden .tile .info { opacity: 0; }
 .bar-icon:focus::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
   white-space: nowrap; padding: 3px 10px; border-radius: 6px; background: rgba(11, 10, 9, 0.9); color: var(--ink); font: 500 calc(14px * var(--scale)) / calc(20px * var(--scale)) var(--body); }
 .bar-row .bar-icon:last-child:focus::after { left: auto; right: 0; transform: none; }
-.bar-time { margin-left: 6px; font-size: calc(15px * var(--scale)); color: var(--bright-mono); }
+.bar-time { margin-left: 6px; font-size: calc(18px * var(--scale)); color: var(--bright-mono); }
 .bar-row .live-label { margin-left: 6px; font-size: calc(15px * var(--scale)); }
 .bar .i-play, .bar .i-muted, .bar .i-others-pause { display: none; }
 .bar.is-paused .i-play, .bar.is-muted .i-muted, .bar.others-pause .i-others-pause { display: block; }
@@ -281,7 +281,7 @@ body.touch-ui #ov, body.touch-ui #paused { display: none; }
 
 /* ---- resting (R-67): End, Paused and PhoneLost boards give way to the idle screen after 5 minutes ---------------- */
 body.resting #vwrap, body.resting #tiles, body.resting #ov, body.resting .pill, body.resting #buffering, body.resting #paused,
-body.resting #upnext, body.resting #phonelost, body.resting #end, body.resting nav.hub { display: none !important; }
+body.resting #upnext, body.resting #phonelost, body.resting #end, body.resting nav.hub, body.resting #bar { display: none !important; }
 
 /* ---- discreet (C9): no titles or pictures ------------------------------------------------------------------------ */
 body.discreet #ov, body.discreet .tile .info, body.discreet .tile .name, body.discreet .thumb img { display: none; }

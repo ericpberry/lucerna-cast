@@ -1177,7 +1177,13 @@
     // tiles; the first remote press must land on a focused button (Spool D-116)
     renderTiles();
     if (playing && mode && !S.touch && !$('tiles').contains(document.activeElement) && !S.starting && overlayButtons().length === 0) focusTileButton(S.tiles.focused);
+    // Back closes it for this pause (then Back again offers the exit); playing again forgets that.
+    if (!paused) S.barDismissed = false;
+    var holdBar = paused && !mode && !S.touch && !lost && !S.starting && !resting && !S.barDismissed && S.screen === 'play';
+    S.barHeld = holdBar;
+    if (holdBar && !S.bar) { S.bar = { from: -1, until: now() + BAR_HIDE_MS, last: null, single: true }; S.barFocus = true; }
     renderBar(playing && (!!mode || !!(S.bar && S.bar.single)) && !S.touch && !lost && !S.starting, st, pos, dur);
+    if (S.barFocus && S.bar) { S.barFocus = false; if (!$('bar').contains(document.activeElement)) focusFirst([$('barToggle')]); }
 
     // buffering
     show($('buffering'), showBuffering && !S.starting);
@@ -1192,7 +1198,8 @@
 
     // paused (TvPaused)
     // D-89: with tiles, a paused tile carries its own chip; the board would cover the whole grid.
-    show($('paused'), paused && !S.starting && !lost && !mode);
+    // D-97: with a remote, a paused video shows the control bar (and keeps it up until it plays), never this card.
+    show($('paused'), paused && !S.starting && !lost && !mode && S.touch);
     setText($('pauseTitle'), title);
     var fromPhone = !S.pausedLocally;
     setText($('pauseSub'), [site, fromPhone ? 'paused from your phone' : 'paused'].filter(Boolean).join(' · '));
@@ -1289,6 +1296,7 @@
   }
   function closeBar() {
     if (!S.bar) return;
+    if (S.barHeld) S.barDismissed = true;
     var from = S.bar.from;
     S.bar = null;
     render();
@@ -1300,7 +1308,7 @@
     var bar = $('bar');
     // A bar for one video ends when tiles start, and a tiles bar when tiles end (the other kind opens fresh).
     var wrongKind = S.bar && !!S.bar.single === !!tilesMode();
-    if (S.bar && (!on || now() > S.bar.until || wrongKind)) { closeBar(); return; }
+    if (S.bar && (!on || (now() > S.bar.until && !(S.bar.single && S.barHeld)) || wrongKind)) { closeBar(); return; }
     show(bar, on && !!S.bar);
     cls(body, 'bar-open', on && !!S.bar);
     if (!S.bar || !on) return;
@@ -1326,7 +1334,8 @@
     show($('barJump'), live);
     show($('barLive'), live);
     var hours = dur >= 3600;
-    var timeText = !live && dur > 0 ? fmt(pos, hours) + ' / ' + fmt(dur, hours) : '';
+    // m7: a paused live video says how far behind live it is, the same number the phone shows.
+    var timeText = !live && dur > 0 ? fmt(pos, hours) + ' / ' + fmt(dur, hours) : live && single && isPaused ? behindLiveText(behindLive()) : '';
     setText($('barTime'), timeText);
     show($('barTime'), !!timeText);
     var frac = live ? 1 : dur > 0 ? clamp(pos / dur, 0, 1) : 0;
