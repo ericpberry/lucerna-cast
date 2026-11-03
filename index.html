@@ -48,6 +48,18 @@
 
     <!-- Tiles: Focus + motion snapshots (TvFocus), and Phone combines chrome (R4, R5) -->
     <section id="tiles" class="tiles" hidden></section>
+    <!-- D-101: the Layout row, the Add a video row and a tile's menu take the bar's lower part (one panel). Amber is
+         where the D-pad is, white is what's chosen. -->
+    <section id="tpanel" class="tpanel" hidden>
+      <div class="tp-shade"></div>
+      <div class="tp-body">
+        <div class="tp-head"><span class="tp-title" id="tpTitle"></span><span class="tp-sub" id="tpSub"></span></div>
+        <div class="tp-tabs" id="tpTabs"></div>
+        <div class="tp-row" id="tpRow"></div>
+        <div class="tp-extra" id="tpExtra" hidden></div>
+        <div class="tp-msg" id="tpMsg"></div>
+      </div>
+    </section>
 
     <!-- Tiles, controls level (D-89, D-92 YouTube style): over a bottom gradient, the tile with sound's title, a thin
          progress line (Up from the buttons; Left/Right seek there), and a row of icon buttons with a label on the focused
@@ -75,6 +87,8 @@
             <button class="bar-icon" id="barNext" type="button" aria-label="Next" data-tip="Next"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5l9 7-9 7z" fill="currentColor"></path><path d="M18 5v14"></path></svg></button>
           </div>
           <div class="bar-grp right">
+            <button class="bar-icon" id="barAdd" type="button" aria-label="Add a video" data-tip="Add a video"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+            <button class="bar-icon" id="barLayout" type="button" aria-label="Layout" data-tip="Layout"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="7" height="16" rx="1.5"></rect><rect x="13" y="4" width="8" height="7" rx="1.5"></rect><rect x="13" y="13" width="8" height="7" rx="1.5"></rect></svg></button>
             <button class="bar-icon" id="barMute" type="button" aria-label="Mute" data-tip="Mute"><svg class="i-sound" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path><path d="M19 5a10 10 0 0 1 0 14"></path></svg><svg class="i-muted" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M22 9l-6 6M16 9l6 6"></path></svg></button>
             <button class="bar-icon" id="barOthers" type="button" aria-label="Others keep playing" data-tip="Others keep playing"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="8.5" height="14" rx="1.5"></rect><rect x="13" y="5" width="8.5" height="14" rx="1.5"></rect><path class="i-others-pause" d="M16 9.5v5M18.5 9.5v5"></path></svg></button>
             <button class="bar-icon" id="barFull" type="button" aria-label="Full screen" data-tip="Full screen"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg></button>

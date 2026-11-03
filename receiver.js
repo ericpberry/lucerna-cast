@@ -86,7 +86,14 @@
     pausedSince: 0,         // R-67: when the current pause began (0 = not paused)
     liveBase: null,         // m7: the player's own delay at live (s), least reported while playing since this LOAD
     endSince: 0,            // R-67: when the end-of-queue board appeared
-    fake: null              // preview: the pretend player
+    fake: null,             // preview: the pretend player
+    // D-101
+    navUntil: 0,            // the D-pad is moving between tiles until then: the amber ring, the white border
+    panel: null,            // the Layout row, the Add row or a tile's menu: { kind, tab, tile, opener }
+    catalog: null,          // the phone's Add list (catalog message), while the Add row is open
+    sizes: {},              // itemId -> 'w x h' last reported to the phone
+    aspects: {},            // itemId -> width / height as this page saw it
+    okHold: null            // a long press of OK on a tile opens its menu
   };
 
   var context = null;
@@ -368,6 +375,7 @@
       case 'status': S.status = m; if (m.paused) S.pausedLocally = false; break;
       case 'queue': S.queue = m.upNext.slice(0, M.MAX_UP_NEXT).map(function (q) { return { id: q.id, title: M.cap(q.title), live: q.live, durationMs: q.durationMs }; }); break;
       case 'end': onEnd(m); break;
+      case 'catalog': onCatalog(m); break;
       case 'ping': send('pong', { at: m.at }); break;
       case 'pong': break;
       default: break;
@@ -426,8 +434,16 @@
   }
 
   // ---- tiles (R4, R5, T1, T2) ---------------------------------------------------------------------------------------------
-  var LAYOUTS = ['two', 'three', 'four', 'onePlusThree', 'lineup'];   // lineup: D-99
-  var TILE_COUNT = { two: 2, three: 3, four: 4, onePlusThree: 4, lineup: 4 };
+  // D-101: the phone places every tile (slot rects); the names are for the Layout row and the old phones' grids (T2).
+  var LAYOUTS = ['bestFit', 'even', 'oneBig', 'lineup', 'pip', 'two', 'three', 'four', 'onePlusThree'];
+  var LAYOUT_NAMES = [['bestFit', 'Best fit'], ['even', 'Even'], ['oneBig', 'One big'], ['lineup', 'Lineup'], ['pip', 'Picture in picture']];
+  var BIG_SPOT = ['oneBig', 'lineup', 'pip'];
+  var TILE_COUNT = { two: 2, three: 3, four: 4, onePlusThree: 4, lineup: 4, bestFit: 4, even: 4, oneBig: 4, pip: 4 };
+  function cleanRect(r) {
+    if (!r) return null;
+    var x = clamp(r.x, 0, 1), y = clamp(r.y, 0, 1);
+    return { x: x, y: y, w: clamp(r.w, 0, 1 - x), h: clamp(r.h, 0, 1 - y) };
+  }
 
   /** C-B4/C-B5: no tiles at all: the grid, its pictures and snapshot addresses go, the video fills the screen again. */
   function resetTiles() {
@@ -461,18 +477,20 @@
   function onTiles(m) {
     var filled = m.slots.filter(function (s) { return s && s.itemId; }).length;
     if (m.mode === 'single' || filled < 2 && m.mode !== 'phoneCombines') { if (S.tiles) { resetTiles(); render(); } return; }
-    var layout = LAYOUTS.indexOf(m.layout) >= 0 ? m.layout : 'two';
+    // D-101: a phone that sends rects places every tile itself; its crops already hold the zoom (never zoomed twice).
+    var placed = m.slots.some(function (s) { return !!s.rect; });
+    var layout = LAYOUTS.indexOf(m.layout) >= 0 ? m.layout : placed ? 'bestFit' : 'two';
     var slots = m.slots.slice(0, TILE_COUNT[layout]).map(function (s, i) {
       var c = s.crop;
       var l = clamp(c.l, 0, 1), t = clamp(c.t, 0, 1), r = clamp(c.r, 0, 1), b = clamp(c.b, 0, 1);
       if (r - l < 0.05) { l = 0; r = 1; }
       if (b - t < 0.05) { t = 0; b = 1; }
-      return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: clamp(s.zoom || 1, 1, 4), color: s.color, note: s.note ? M.cap(s.note) : '', paused: !!s.paused, site: s.site ? M.cap(s.site) : '' };
+      return { index: i, itemId: s.itemId, title: M.cap(s.title), live: s.live, crop: { l: l, t: t, r: r, b: b }, zoom: placed ? 1 : clamp(s.zoom || 1, 1, 4), rect: placed ? cleanRect(s.rect) : null, color: s.color, note: s.note ? M.cap(s.note) : '', paused: !!s.paused, site: s.site ? M.cap(s.site) : '' };
     });
     S.exitUntil = 0;   // D-94: Back brought the grid back (a filled tile), it didn't ask to leave
     var before = S.tiles ? S.tiles.slots : [];
     S.tiles = { layout: layout, slots: slots, focused: clamp(m.focused, 0, Math.max(0, slots.length - 1)), audio: m.audio, mode: m.mode,
-      muted: !!m.muted, othersPause: !!m.othersPause };
+      muted: !!m.muted, othersPause: !!m.othersPause, placed: placed, bigSize: m.bigSize || 'm', panel: placed ? cleanRect(m.panel) : null };
     // D-89: the page's video is the tile with sound; the phone says whether it is muted.
     video.muted = !!m.muted;
     if (S.bar && !S.tiles.slots[S.bar.from]) S.bar.from = S.tiles.focused;
@@ -491,6 +509,8 @@
     S.tileKey = key;
     buildTiles(rebuilt);
     restartSnapTimers();
+    reportVideoSize();
+    if (S.panel && S.panel.kind !== 'add') { if (S.panel.kind === 'tile' && !S.tiles.slots[S.panel.tile]) closePanel(); else renderPanel(); }
   }
 
   function tilesMode() {
@@ -508,14 +528,38 @@
   var TOUCH_BAND = 112;
   function tileRects() {
     if (isLineup()) return lineupRects();
-    // D-98: the open control bar sits under the grid (title above it): the grid makes room rather than being covered.
-    if (barUnderGrid()) {
-      return layoutRects(S.tiles.layout, view.W, view.H - BAR_HEAD_H - BAR_FOOT_H).map(function (r) { return { x: r.x, y: r.y + BAR_HEAD_H, w: r.w, h: r.h }; });
-    }
+    // D-101: the open control bar lies over the tiles (YouTube): nothing moves but Picture in picture's panel.
+    if (S.tiles.placed) return placedRects();
     return layoutRects(S.tiles.layout, view.W, view.H - (S.touch ? TOUCH_BAND : 0));
   }
-  var BAR_HEAD_H = 76, BAR_FOOT_H = 150;
-  function barUnderGrid() { return !!S.bar && !S.bar.single && !S.touch && tilesMode() && !isLineup(); }
+  /** The phone's rects in stage pixels; a touch display keeps its control band under them (R-39). */
+  function stageRect(r) {
+    var W = view.W, H = view.H, k = S.touch ? (H - TOUCH_BAND) / H : 1, ox = (W - W * k) / 2;
+    return { x: ox + r.x * W * k, y: r.y * H * k, w: r.w * W * k, h: r.h * H * k };
+  }
+  /** D-101: with the bar open, Picture in picture's panel and its tiles rise so the panel ends above the bar's line. */
+  var PIP_LIFT_BOTTOM = 384;
+  function isPip() { return !!S.tiles && S.tiles.placed && S.tiles.layout === 'pip' && !!S.tiles.panel && !!tilesMode(); }
+  function pipLift() {
+    if (!isPip() || !S.bar || S.bar.single || S.touch) return 0;
+    var p = stageRect(S.tiles.panel);
+    return Math.min(0, PIP_LIFT_BOTTOM - (p.y + p.h));
+  }
+  function placedRects() {
+    var dy = pipLift();
+    return S.tiles.slots.map(function (s, i) {
+      var r = stageRect(s.rect || { x: 0, y: 0, w: 1, h: 1 });
+      if (i !== S.tiles.audio) r.y += dy;
+      return r;
+    });
+  }
+  function panelRect() {
+    if (!isPip()) return null;
+    var r = stageRect(S.tiles.panel);
+    r.y += pipLift();
+    return r;
+  }
+  function isBigSpot() { return !!S.tiles && BIG_SPOT.indexOf(S.tiles.layout) >= 0; }
   /** D-99: Lineup: the tile with sound plays full screen and the others wait as cards in a row under the bar. */
   function isLineup() { return !!S.tiles && S.tiles.layout === 'lineup' && !!tilesMode() && !S.touch; }
   var CARD_W = 184, CARD_H = 104, CARD_GAP = 14, CARD_X = 48, CARD_PEEK = 70;
@@ -524,7 +568,7 @@
     var up = !!(S.bar && S.bar.row);
     var y = up ? H - 30 - 52 - CARD_H : H - CARD_PEEK;   // up: room for the captions; down: the pictures' top peeks
     S.tiles.slots.forEach(function (slot, i) {
-      if (i === S.tiles.audio) { out[i] = { x: 0, y: 0, w: W, h: H }; return; }
+      if (i === S.tiles.audio) { out[i] = slot.rect ? stageRect(slot.rect) : { x: 0, y: 0, w: W, h: H }; return; }
       if (!slot.itemId) { out[i] = { x: -CARD_W - 40, y: y, w: CARD_W, h: CARD_H }; return; }
       out[i] = { x: CARD_X + k * (CARD_W + CARD_GAP), y: y, w: CARD_W, h: CARD_H };
       k++;
@@ -581,6 +625,8 @@
     var hadFocus = box.contains(document.activeElement);
     if (rebuilt || tileEls.length !== S.tiles.slots.length) {
       box.textContent = '';
+      box.appendChild(el('div', 'pip-panel'));
+      box.appendChild(el('span', 'pip-cap'));
       tileEls = S.tiles.slots.map(function (slot, i) {
         var b = el('button', 'tile');
         b.type = 'button';
@@ -596,10 +642,8 @@
         info.appendChild(el('span', 't-title'));
         info.appendChild(el('span', 't-sub'));
         b.appendChild(info);
+        // D-101: the tile with sound has a border, not a speaker; names show with the bar, or on the D-pad's tile.
         var nm = el('span', 'name');
-        var spk = el('i', 'spk');
-        spk.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7"></path></svg>';
-        nm.appendChild(spk);
         nm.appendChild(el('span', 'nt'));
         b.appendChild(nm);
         var status = el('span', 'status');
@@ -627,6 +671,13 @@
       });
     }
     var rects = tileRects();
+    cls(body, 'big-spot', isBigSpot());
+    cls(body, 'pip', isPip());
+    var pr = panelRect(), panelEl = box.querySelector('.pip-panel');
+    if (panelEl) {
+      show(panelEl, !!pr);
+      if (pr) { panelEl.style.left = pr.x + 'px'; panelEl.style.top = pr.y + 'px'; panelEl.style.width = pr.w + 'px'; panelEl.style.height = pr.h + 'px'; }
+    }
     S.tiles.slots.forEach(function (slot, i) {
       var t = tileEls[i], r = rects[i];
       var b = t.btn;
@@ -634,6 +685,9 @@
       var ins = safeInsets(r, r.w < 400);
       b.style.setProperty('--sl', ins.l.toFixed(1) + 'px'); b.style.setProperty('--st', ins.t.toFixed(1) + 'px');
       b.style.setProperty('--sr', ins.r.toFixed(1) + 'px'); b.style.setProperty('--sb', ins.b.toFixed(1) + 'px');
+      // D-101: with the bar up, a name at a tile's top-left stays clear of the title of the video with sound.
+      b.style.setProperty('--lt', (r.y < 92 && r.x < 560 ? Math.max(ins.t, 100 - r.y) : ins.t).toFixed(1) + 'px');
+      cls(b, 'sub', isPip() && i !== S.tiles.audio);
       cls(b, 'chosen', !!S.touch && i === S.tiles.focused);
       var isVideo = mode === 'focus' && i === S.tiles.focused;
       var empty = !slot.itemId && !slot.title && !slot.color;
@@ -662,9 +716,23 @@
       }
     });
     if (hadFocus || !box.contains(document.activeElement)) focusTileButton(S.tiles.focused);
+    placePipCap();
   }
+  /** D-101: in Picture in picture the D-pad's small tile names itself above the panel (its tile is too narrow). */
+  function placePipCap() {
+    var cap = $('tiles').querySelector('.pip-cap'), pr = panelRect();
+    if (!cap) return;
+    var i = tileEls.map(function (t) { return t.btn; }).indexOf(document.activeElement);
+    var on = !!pr && navOn() && i >= 0 && i !== S.tiles.audio && !S.hello.discreet && !!(S.tiles.slots[i] && S.tiles.slots[i].title);
+    show(cap, on);
+    if (!on) return;
+    setText(cap, S.tiles.slots[i].title);
+    cap.style.right = (view.W - pr.x - pr.w) + 'px'; cap.style.top = (pr.y - 36) + 'px';
+  }
+  function navOn() { return !!tilesMode() && !S.bar && !S.panel && !S.touch && now() < S.navUntil && S.screen === 'play'; }
 
   function focusTileButton(i) {
+    if (S.panel) return;
     if (isLineup() && !S.bar) { var a = document.activeElement; if (a && a !== body && a.blur) a.blur(); return; }   // D-99: no tile focus in a Lineup
     var t = tileEls[i];
     if (t && !S.touch && !S.bar && overlayButtons().length === 0) { try { t.btn.focus({ preventScroll: true }); } catch (e) { t.btn.focus(); } }
@@ -699,10 +767,8 @@
       if (S.tiles.audio === i) subParts.push(S.tiles.muted ? 'muted' : 'sound on');
       setText(t.info.querySelector('.t-sub'), subParts.join(' · '));
       var nameText = title || (sound && t.isVideo && !S.hello.discreet ? curTitle() : '');
-      show(t.name, !!nameText || sound);
+      show(t.name, !!nameText);
       setText(t.name.querySelector('.nt'), nameText);
-      cls(t.name, 'sound', sound);
-      cls(t.name, 'muted', sound && !!S.tiles.muted);
       var snap = mode === 'focus' && !t.isVideo && !!(slot.itemId || slot.color);
       // m11: the refresh rate is a diagnostic (?debug=1), not something to read on a TV.
       show(t.fps, snap && DEBUG);
@@ -729,6 +795,9 @@
       cls(t.btn, 'chips-2', nChips === 2);
     });
     cls(body, 'ov-hidden', now() > S.overlayUntil && mode === 'focus' && !S.fake);
+    cls(body, 'tile-nav', navOn());
+    cls(body, 'tiles-combines', mode === 'combines');
+    placePipCap();
   }
 
   /**
@@ -832,6 +901,7 @@
     S.snapFails = 0;
     var img = t.imgs[k];
     t.nat = { w: img.naturalWidth || 16, h: img.naturalHeight || 9 };
+    if (img.naturalWidth && img.naturalHeight && t.slot) reportSize(t.slot.itemId, img.naturalWidth, img.naturalHeight);
     cropImage(t, img);
     cls(img, 'on', true);
     cls(t.imgs[1 - k], 'on', false);
@@ -1329,7 +1399,7 @@
   function barSlot() { return S.tiles ? S.tiles.slots[S.tiles.audio] || S.tiles.slots[S.tiles.focused] || null : null; }
   /** The bar's buttons, left to right (only the visible ones); the progress line is the row above them (D-92). */
   function barButtons() {
-    return ['barJump', 'barPrev', 'barToggle', 'barNext', 'barMute', 'barOthers', 'barFull']
+    return ['barJump', 'barPrev', 'barToggle', 'barNext', 'barAdd', 'barLayout', 'barMute', 'barOthers', 'barFull']
       .map(function (id) { return $(id); }).filter(function (b) { return b.offsetParent !== null; });
   }
   /** [from] is the tile to return to; -1 opens the bar for one video (D-96: the same bar as tiles). */
@@ -1341,6 +1411,7 @@
   }
   function closeBar() {
     if (!S.bar) return;
+    if (S.panel) closePanel(true);
     if (S.barHeld) S.barDismissed = true;
     var from = S.bar.from;
     S.bar = null;
@@ -1353,15 +1424,15 @@
     var bar = $('bar');
     // A bar for one video ends when tiles start, and a tiles bar when tiles end (the other kind opens fresh).
     var wrongKind = S.bar && !!S.bar.single === !!tilesMode();
-    if (S.bar && (!on || (now() > S.bar.until && !(S.barHeld && (S.bar.single || isLineup())) && !S.bar.row) || wrongKind)) { closeBar(); return; }
+    if (S.bar && (!on || (now() > S.bar.until && !(S.barHeld && (S.bar.single || isLineup())) && !S.bar.row && !S.panel) || wrongKind)) { closeBar(); return; }
     cls(body, 'lineup', isLineup());
     var rowWas = body.classList.contains('lineup-row');
     cls(body, 'lineup-row', isLineup() && !!S.bar && !!S.bar.row && on);
-    var wasUnder = body.classList.contains('bar-tiles');
     show(bar, on && !!S.bar);
     cls(body, 'bar-open', on && !!S.bar);
-    cls(body, 'bar-tiles', on && barUnderGrid());
-    if (wasUnder !== body.classList.contains('bar-tiles') && tileEls.length && S.tiles) buildTiles(false);   // the grid makes room
+    // D-101: Picture in picture's panel rises above the bar (and settles back when it closes).
+    var lift = pipLift();
+    if (lift !== S.liftBuilt && tileEls.length && S.tiles) { S.liftBuilt = lift; buildTiles(false); }
     if (isLineup() && tileEls.length && (rowWas !== body.classList.contains('lineup-row') || S.lineupBuiltOpen !== (on && !!S.bar))) {
       S.lineupBuiltOpen = on && !!S.bar;
       buildTiles(false);   // D-99: the row peeks with the bar and rises when Down moves into it
@@ -1378,6 +1449,8 @@
     var it = single ? currentItem() : null;
     show($('barPrev'), single && !!(it && it.index > 1));
     show($('barMute'), !single);
+    show($('barAdd'), !single);
+    show($('barLayout'), !single);
     show($('barOthers'), !single && !lineup);   // D-99: a Lineup plays one video at a time
     show($('barFull'), !single && !lineup);
     show($('barNext'), single && !!(S.queue && S.queue.length));
@@ -1405,7 +1478,7 @@
     $('barKnob').style.left = (frac * 100).toFixed(2) + '%';
     // A control that went away (the tile turned live, or stopped being live) hands focus to the first one left.
     var a = document.activeElement;
-    if (a !== $('barScrub') && lineupCards().indexOf(a) < 0 && (!bar.contains(a) || a.offsetParent === null)) focusFirst(barButtons());
+    if (!S.panel && a !== $('barScrub') && lineupCards().indexOf(a) < 0 && (!bar.contains(a) || a.offsetParent === null)) focusFirst(barButtons());
   }
   /**
    * Remote keys while the bar is open (D-92, YouTube): Left/Right between the buttons; Up to the progress line, where
@@ -1478,6 +1551,302 @@
     setText($('hubCount'), it && it.count > it.index ? (it.count - it.index) + ' up next' : (S.fake && S.fake.count) || '');
   }
 
+  // ---- D-101: the Layout row, the Add row and a tile's menu (one panel over the bar's place) -----------------------------
+  /** A tile's video size, once per change, so the phone's Best fit knows each video's shape. */
+  function reportSize(itemId, w, h) {
+    if (!itemId || !(w > 0) || !(h > 0)) return;
+    var key = w + 'x' + h;
+    S.aspects[itemId] = w / h;
+    if (S.sizes[itemId] === key) return;
+    S.sizes[itemId] = key;
+    send('size', { itemId: itemId, w: w, h: h });
+  }
+  function reportVideoSize() {
+    if (PREVIEW || !tilesMode() || !video.videoWidth || !video.videoHeight) return;
+    var s = S.tiles.slots[S.tiles.focused];
+    if (s && s.itemId) reportSize(s.itemId, video.videoWidth, video.videoHeight);
+  }
+
+  /** A tile's shape for the Layout row's pictures: its rect's (the phone's crop), else what this page saw, else 16:9. */
+  function slotAspect(s) {
+    if (s.rect && s.rect.h > 0 && s.rect.w > 0 && !(s.rect.w === 1 && s.rect.h === 1)) return (s.rect.w * 16) / (s.rect.h * 9);
+    return (s.itemId && S.aspects[s.itemId]) || 16 / 9;
+  }
+
+  /**
+   * The phone's LayoutEngine (core/.../tiles/LayoutEngine.kt), kept small, only to draw the Layout row's pictures; where
+   * tiles really go always comes from the phone's rects.
+   */
+  var Mini = (function () {
+    function fitIn(a, c) {
+      var w, h;
+      if (a > c.w / c.h) { w = c.w; h = c.w / a; } else { h = c.h; w = c.h * a; }
+      return { x: c.x + (c.w - w) / 2, y: c.y + (c.h - h) / 2, w: w, h: h };
+    }
+    function splits(n) {
+      var out = [];
+      for (var mask = 0; mask < (1 << (n - 1)); mask++) {
+        var parts = [], run = 1;
+        for (var i = 0; i < n - 1; i++) { if (mask & (1 << i)) { parts.push(run); run = 1; } else run++; }
+        parts.push(run); out.push(parts);
+      }
+      return out.sort(function (a, b) { return a.length - b.length; });
+    }
+    function score(bs) { return bs.reduce(function (s, b) { return s + Math.sqrt(b.w * b.h); }, 0); }
+    function justified(as, parts, area, g, cols) {
+      var a = cols ? as.map(function (x) { return 1 / x; }) : as;
+      var aw = cols ? area.h : area.w, ah = cols ? area.w : area.h;
+      var groups = [], at = 0;
+      parts.forEach(function (p) { var gr = []; for (var i = at; i < at + p; i++) gr.push(i); groups.push(gr); at += p; });
+      var sums = groups.map(function (gr) { return gr.reduce(function (s, i) { return s + a[i]; }, 0); });
+      var fixed = 0, inv = 0;
+      groups.forEach(function (gr, r) { fixed += (gr.length - 1) * g / sums[r]; inv += 1 / sums[r]; });
+      var width = Math.min(aw, (ah - (groups.length - 1) * g + fixed) / inv);
+      var heights = groups.map(function (gr, r) { return (width - (gr.length - 1) * g) / sums[r]; });
+      var total = heights.reduce(function (s, x) { return s + x; }, 0) + (groups.length - 1) * g;
+      var y = (ah - total) / 2, x0 = (aw - width) / 2, out = [];
+      groups.forEach(function (gr, r) {
+        var x = x0;
+        gr.forEach(function (i) {
+          var w = a[i] * heights[r];
+          out[i] = cols ? { x: area.x + y, y: area.y + x, w: heights[r], h: w } : { x: area.x + x, y: area.y + y, w: w, h: heights[r] };
+          x += w + g;
+        });
+        y += heights[r] + g;
+      });
+      return out;
+    }
+    function bestFit(as, area, g) {
+      var best = null, bestScore = -1;
+      splits(as.length).forEach(function (parts) {
+        [false, true].forEach(function (cols) {
+          var b = justified(as, parts, area, g, cols), sc = score(b);
+          if (sc > bestScore + 0.5) { best = b; bestScore = sc; }
+        });
+      });
+      return best;
+    }
+    function even(as, area, g) {
+      var n = as.length, best = null, bestScore = -1;
+      for (var c = 1; c <= n; c++) {
+        var rows = Math.ceil(n / c);
+        if ((rows - 1) * c >= n) continue;
+        var cw = (area.w - (c - 1) * g) / c, ch = (area.h - (rows - 1) * g) / rows, gridH = rows * ch + (rows - 1) * g;
+        var b = as.map(function (a, i) {
+          var r = Math.floor(i / c), inRow = r === rows - 1 ? n - r * c : c, rowW = inRow * cw + (inRow - 1) * g;
+          return fitIn(a, { x: area.x + (area.w - rowW) / 2 + (i % c) * (cw + g), y: area.y + (area.h - gridH) / 2 + r * (ch + g), w: cw, h: ch });
+        });
+        var sc = score(b);
+        if (sc > bestScore + 0.5) { best = b; bestScore = sc; }
+      }
+      return best;
+    }
+    function oneBig(as, sound, f, area, g) {
+      var big = fitIn(as[sound], { x: area.x, y: area.y, w: (area.w - g) * f, h: area.h });
+      var others = as.map(function (a, i) { return i; }).filter(function (i) { return i !== sound; });
+      var tall = big.h >= 0.6 * area.h, sy = tall ? big.y : area.y, sh = tall ? big.h : area.h;
+      var colX = big.x + big.w + g, colW = area.x + area.w - colX, ch = (sh - (others.length - 1) * g) / others.length;
+      var out = [];
+      out[sound] = big;
+      others.forEach(function (i, j) { out[i] = fitIn(as[i], { x: colX, y: sy + j * (ch + g), w: colW, h: ch }); });
+      var right = Math.max.apply(null, others.map(function (i) { return out[i].x + out[i].w; }));
+      var dx = (area.w - (right - big.x)) / 2 - (big.x - area.x);
+      return out.map(function (b) { return { x: b.x + dx, y: b.y, w: b.w, h: b.h }; });
+    }
+    /** { rects, panel } in a W x H picture for a layout, the tiles' shapes and which one has sound. */
+    function plan(layout, as, sound, big, W, H) {
+      var k = W / 960, m = 20 * k, g = 10 * k, area = { x: m, y: m, w: W - 2 * m, h: H - 2 * m }, full = { x: 0, y: 0, w: W, h: H };
+      var n = as.length;
+      if (n === 1) return { rects: [fitIn(as[0], layout === 'lineup' || layout === 'pip' ? full : area)], panel: null };
+      if (layout === 'even') return { rects: even(as, area, g), panel: null };
+      if (layout === 'oneBig') return { rects: oneBig(as, sound, { s: 0.6, m: 0.7, l: 0.8 }[big] || 0.7, area, g), panel: null };
+      if (layout === 'lineup') return { rects: as.map(function (a, i) { return i === sound ? fitIn(a, full) : null; }), panel: null };
+      if (layout === 'pip') {
+        var others = as.map(function (a, i) { return i; }).filter(function (i) { return i !== sound; });
+        var pg = 6 * k, pad = 6 * k, margin = 24 * k, h = H * 0.26, sum = others.reduce(function (s, i) { return s + as[i]; }, 0);
+        var maxW = W * 0.62 - 2 * pad;
+        if (sum * h + (others.length - 1) * pg > maxW) h = (maxW - (others.length - 1) * pg) / sum;
+        var rowW = sum * h + (others.length - 1) * pg;
+        var panel = { x: W - margin - rowW - 2 * pad, y: H - margin - h - 2 * pad, w: rowW + 2 * pad, h: h + 2 * pad };
+        var x = panel.x + pad, rects = [];
+        rects[sound] = fitIn(as[sound], full);
+        others.forEach(function (i) { rects[i] = { x: x, y: panel.y + pad, w: as[i] * h, h: h }; x += as[i] * h + pg; });
+        return { rects: rects, panel: panel };
+      }
+      return { rects: bestFit(as, area, g), panel: null };
+    }
+    return { plan: plan };
+  })();
+
+  var MINI_TINTS = ['#3B4F6B', '#5D7350', '#6B4A5A', '#4E5A3A'];
+  var TICK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>';
+
+  /** A tile's last picture for a mini (its snapshot), or null (a flat tint). */
+  function tilePicture(i) {
+    var t = tileEls[i];
+    if (!t) return null;
+    var img = t.imgs[t.front];
+    return img && img.classList.contains('on') && img.src ? img.src : null;
+  }
+  function miniEl(layout) {
+    var w = 152, h = 86, box = el('div', 'mini');
+    var slots = S.tiles.slots, as = slots.map(slotAspect);
+    var p = Mini.plan(layout, as, clamp(S.tiles.audio, 0, slots.length - 1), S.tiles.bigSize, w, h);
+    function add(r, i, cl) {
+      var d = el('div', cl);
+      d.style.left = r.x.toFixed(1) + 'px'; d.style.top = r.y.toFixed(1) + 'px'; d.style.width = r.w.toFixed(1) + 'px'; d.style.height = r.h.toFixed(1) + 'px';
+      if (i >= 0) {
+        var pic = tilePicture(i);
+        d.style.background = MINI_TINTS[i % MINI_TINTS.length];
+        if (pic) d.style.backgroundImage = 'url("' + pic.replace(/"/g, '%22') + '")';
+      }
+      box.appendChild(d);
+    }
+    if (layout === 'lineup') {
+      var cw = w * 0.2, ch = cw * 9 / 16, k = 0;
+      add(p.rects[S.tiles.audio] || { x: 0, y: 0, w: w, h: h }, S.tiles.audio, 'm big');
+      slots.forEach(function (s, i) { if (i !== S.tiles.audio) { add({ x: 6 + k * (cw + 4), y: h - ch - 6, w: cw, h: ch }, i, 'm'); k++; } });
+      return box;
+    }
+    if (p.panel) add(p.panel, -1, 'm panel');
+    p.rects.forEach(function (r, i) { if (r) add(r, i, 'm' + (i === S.tiles.audio && BIG_SPOT.indexOf(layout) >= 0 ? ' big' : '')); });
+    return box;
+  }
+  function tchip(label, key, on, click) {
+    var b = el('button', 'tchip' + (on ? ' on' : ''), label);
+    b.type = 'button'; b.setAttribute('data-key', key);
+    b.addEventListener('click', click);
+    return b;
+  }
+
+  function openPanel(kind, tile) {
+    if (!tilesMode() && kind !== 'tile') return;
+    if (kind === 'tile' && !(S.tiles && S.tiles.slots[tile] && S.tiles.slots[tile].itemId)) return;
+    S.panel = { kind: kind, tab: 'found', tile: tile, opener: kind === 'tile' ? null : document.activeElement };
+    if (kind === 'add') { S.catalog = null; send('tileCmd', { action: 'catalog' }); }
+    renderPanel();
+    var first = kind === 'layout' ? $('tpRow').querySelector('.opt.current') : null;
+    focusFirst([first].concat(panelButtons()));
+    render();
+  }
+  function closePanel(quiet) {
+    if (!S.panel) return;
+    var p = S.panel;
+    S.panel = null;
+    show($('tpanel'), false);
+    cls(body, 'panel-open', false);
+    if (quiet) return;
+    if (p.kind === 'tile') { S.navUntil = now() + BAR_HIDE_MS; focusTileButton(clamp(p.tile, 0, S.tiles ? S.tiles.slots.length - 1 : 0)); }
+    else if (S.bar) focusFirst([p.opener && p.opener.offsetParent !== null ? p.opener : $('barToggle')]);
+    render();
+  }
+  function panelButtons() {
+    return Array.prototype.slice.call($('tpanel').querySelectorAll('button')).filter(function (b) { return b.offsetParent !== null && !b.disabled; });
+  }
+  function panelKey(k) {
+    if (k === 'back') { closePanel(); return; }
+    if (k === 'ok') { var a = document.activeElement; if ($('tpanel').contains(a)) a.click(); else focusFirst(panelButtons()); return; }
+    if (k === 'left' || k === 'right') {
+      // Left and Right stay in their row (tabs, pictures, cards or chips); Up and Down change rows.
+      var cur = document.activeElement, cr = cur.getBoundingClientRect(), cy = cr.top + cr.height / 2;
+      moveFocus(k, panelButtons().filter(function (b) { var r = b.getBoundingClientRect(); return r.top <= cy && r.bottom >= cy; }));
+    } else if (k === 'up' || k === 'down') moveFocus(k, panelButtons());
+    if (S.panel && S.panel.kind === 'layout') sizeRow();
+  }
+  /** One big's size row shows while One big is chosen or the D-pad is on it. */
+  function sizeRow() {
+    var a = document.activeElement;
+    var on = S.tiles.layout === 'oneBig' || (a && a.getAttribute('data-key') === 'layout:oneBig') || $('tpExtra').contains(a);
+    show($('tpExtra'), !!on);
+  }
+  function onCatalog(m) {
+    S.catalog = m;
+    if (S.panel && S.panel.kind === 'add') renderPanel();
+  }
+  /** Rebuilds the open panel, keeping the D-pad on the same thing (data-key). */
+  function renderPanel() {
+    var p = S.panel;
+    if (!p || !S.tiles) { show($('tpanel'), false); return; }
+    var a = document.activeElement, key = a && $('tpanel').contains(a) ? a.getAttribute('data-key') : null;
+    show($('tpanel'), true);
+    cls(body, 'panel-open', true);
+    cls($('tpanel'), 'tp-layout', p.kind === 'layout');
+    cls($('tpanel'), 'tp-add', p.kind === 'add');
+    cls($('tpanel'), 'tp-tile', p.kind === 'tile');
+    var row = $('tpRow'), tabs = $('tpTabs'), extra = $('tpExtra'), msg = $('tpMsg');
+    row.textContent = ''; tabs.textContent = ''; extra.textContent = ''; setText(msg, '');
+    var n = S.tiles.slots.filter(function (s) { return !!s.itemId; }).length;
+    if (p.kind === 'layout') {
+      setText($('tpTitle'), 'Layout');
+      setText($('tpSub'), n + ' videos · Back closes');
+      LAYOUT_NAMES.forEach(function (ln) {
+        var b = el('button', 'opt' + (S.tiles.layout === ln[0] ? ' current' : ''));
+        b.type = 'button'; b.setAttribute('data-key', 'layout:' + ln[0]);
+        b.appendChild(miniEl(ln[0]));
+        var name = el('span', 'oname');
+        if (S.tiles.layout === ln[0]) { var c = el('i', 'chk'); c.innerHTML = TICK; name.appendChild(c); }
+        name.appendChild(document.createTextNode(ln[1]));
+        b.appendChild(name);
+        b.addEventListener('click', function () { send('tileCmd', { action: 'layout', value: ln[0] }); });
+        row.appendChild(b);
+      });
+      extra.appendChild(el('span', 'tp-label', 'Big tile'));
+      [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']].forEach(function (sz) {
+        extra.appendChild(tchip(sz[1], 'big:' + sz[0], S.tiles.bigSize === sz[0], function () { send('tileCmd', { action: 'bigSize', value: sz[0] }); }));
+      });
+    } else if (p.kind === 'tile') {
+      var slot = S.tiles.slots[p.tile];
+      setText($('tpTitle'), S.hello.discreet ? 'This tile' : slot.title || 'This tile');
+      setText($('tpSub'), 'Back closes');
+      var last = S.tiles.slots.length - 1;
+      if (p.tile > 0) row.appendChild(tchip('Move earlier', 'move:-1', false, function () { send('tileCmd', { action: 'move', n: p.tile, to: p.tile - 1 }); closePanel(); }));
+      if (p.tile < last) row.appendChild(tchip('Move later', 'move:1', false, function () { send('tileCmd', { action: 'move', n: p.tile, to: p.tile + 1 }); closePanel(); }));
+      row.appendChild(tchip('Remove from tiles', 'remove', false, function () { send('tileCmd', { action: 'remove', n: p.tile }); closePanel(); }));
+    } else {
+      setText($('tpTitle'), 'Add a video');
+      setText($('tpSub'), 'Found on your phone, by tab');
+      [['found', 'Found'], ['queue', 'Queue'], ['bookmarks', 'Bookmarks']].forEach(function (tb) {
+        tabs.appendChild(tchip(tb[1], 'tab:' + tb[0], p.tab === tb[0], function () { p.tab = tb[0]; renderPanel(); focusFirst([tabs.querySelector('[data-key="tab:' + tb[0] + '"]')]); }));
+      });
+      var c = S.catalog;
+      if (!c) setText(msg, 'Asking your phone…');
+      else if (c.discreet) setText(msg, 'Add videos from your phone.');
+      else {
+        if (c.full) setText(msg, '4 tiles already. Remove one to add another.');
+        var groups = c.groups.filter(function (g) { return g.kind === p.tab && g.entries.length; });
+        if (!groups.length && !c.full) setText(msg, p.tab === 'found' ? 'No videos found in your tabs yet.' : p.tab === 'queue' ? 'Nothing in the queue.' : 'No bookmarked videos.');
+        groups.forEach(function (g) {
+          var gr = el('div', 'grp');
+          gr.appendChild(el('span', 'glbl', g.kind === 'found' ? (g.current ? 'This tab' : M.cap(g.title) || M.cap(g.site)) : ''));
+          var cards = el('div', 'crow');
+          g.entries.forEach(function (en) {
+            var b = el('button', 'acard' + (en.inTiles ? ' in' : ''));
+            b.type = 'button'; b.setAttribute('data-key', 'add:' + en.id);
+            var th = el('span', 'athumb');
+            if (en.thumb && /^https?:\/\//i.test(en.thumb)) { var im = el('img'); im.alt = ''; im.src = en.thumb; cls(im, 'vert', !!en.vertical); th.appendChild(im); }
+            if (en.vertical) th.appendChild(el('span', 'abadge l', 'Vertical'));
+            if (en.live) { var lb = el('span', 'abadge live'); lb.appendChild(el('i')); lb.appendChild(document.createTextNode('LIVE')); th.appendChild(lb); }
+            else if (en.durationMs) th.appendChild(el('span', 'abadge mono', fmt(en.durationMs / 1000, en.durationMs >= 3600000)));
+            b.appendChild(th);
+            b.appendChild(el('span', 'atitle', M.cap(en.title)));
+            b.appendChild(el('span', 'asub', en.inTiles ? 'In tiles' : ''));
+            b.addEventListener('click', function () {
+              if (en.inTiles || c.full) return;
+              send('tileCmd', { action: 'add', value: en.id });
+              closePanel();
+            });
+            cards.appendChild(b);
+          });
+          gr.appendChild(cards);
+          row.appendChild(gr);
+        });
+      }
+    }
+    if (key) { var again = $('tpanel').querySelector('[data-key="' + key.replace(/"/g, '') + '"]'); if (again) focusFirst([again]); }
+    if (!$('tpanel').contains(document.activeElement)) focusFirst(panelButtons());
+    if (p.kind === 'layout') sizeRow(); else show(extra, false);
+  }
+
   // ---- input: TV remote keys (R6) -------------------------------------------------------------------------------------------
   function focusFirst(list) {
     var b = list.filter(function (x) { return x && !x.hidden; })[0];
@@ -1521,11 +1890,12 @@
   };
   var KEYCODE = { 13: 'ok', 37: 'left', 38: 'up', 39: 'right', 40: 'down', 8: 'back', 27: 'back', 461: 'back', 10009: 'back', 179: 'playpause', 176: 'next', 177: 'previous', 412: 'rewind', 417: 'forward' };
 
-  function onKey(e) {
+  function onKey(e, released) {
     var k = KEY[e.key] || KEYCODE[e.keyCode];
     if (!k) return;
     e.preventDefault();
     var t = now();
+    if (released) { S.lastKeyAt = 0; }
     if (S.bar) S.bar.until = t + BAR_HIDE_MS;   // D-89: any key press keeps the bar up
     // Held keys repeat and some remotes send a key twice: one action per press, at most every 0.7 s (Spool D-113).
     // D-89: except Left/Right held on the bar's timeline, which keep seeking at that same 0.7 s rate.
@@ -1536,6 +1906,7 @@
     S.lastAction = k;
     S.overlayUntil = t + T.OVERLAY_MS;
     if (S.starting) { render(); return; }   // the phone is preparing; repeats are ignored (D-115)
+    if (S.panel) { if (S.bar) S.bar.until = t + BAR_HIDE_MS; panelKey(k); render(); return; }
     if (k === 'playpause') { send('key', { action: 'toggle' }); render(); return; }
     if (k === 'next' || k === 'previous') { send('key', { action: k }); render(); return; }
     var buttons = overlayButtons();
@@ -1568,6 +1939,15 @@
       if (S.bar && !S.touch) { barKey(k); render(); return; }
       var tiles = tileEls.map(function (x) { return x.btn; });
       var i = tiles.indexOf(document.activeElement);
+      if (k !== 'back') S.navUntil = t + BAR_HIDE_MS;   // D-101: moving between tiles shows where you are
+      if (k === 'ok' && e.type === 'keydown' && !S.touch) {
+        // D-101: a long press opens the tile's menu (Move, Remove); a short one acts on release.
+        var at = i < 0 ? S.tiles.focused : i;
+        clearTimeout(S.okHold);
+        S.okHold = setTimeout(function () { S.okHold = null; openPanel('tile', at); }, OK_HOLD_MS);
+        render();
+        return;
+      }
       if (k === 'ok') {
         if (i < 0) i = S.tiles.focused;
         // D-89: OK on the tile that already has sound opens its controls; on another tile, gives that tile the sound.
@@ -1593,6 +1973,13 @@
     render();
   }
   document.addEventListener('keydown', onKey);
+  var OK_HOLD_MS = 650;
+  /** The release of a short OK on a tile: the press it began (D-101 holds it back to tell it from a long press). */
+  document.addEventListener('keyup', function (e) {
+    if (!S.okHold || (KEY[e.key] || KEYCODE[e.keyCode]) !== 'ok') return;
+    clearTimeout(S.okHold); S.okHold = null;
+    onKey({ key: e.key, keyCode: e.keyCode, repeat: false, type: 'release', preventDefault: function () {} }, true);
+  });
   document.addEventListener('focusin', function () { cls($('unCard'), 'focus', document.activeElement === $('unPlay')); });
 
   // On-screen buttons (remote OK, or a tap on a touch display)
@@ -1621,6 +2008,10 @@
   $('barMute').addEventListener('click', function () { send('key', { action: 'mute' }); });
   $('barOthers').addEventListener('click', function () { send('key', { action: 'othersPause' }); });
   $('barFull').addEventListener('click', function () { send('key', { action: 'fill' }); closeBar(); });
+  $('barLayout').addEventListener('click', function () { openPanel('layout'); });
+  $('barAdd').addEventListener('click', function () { openPanel('add'); });
+  video.addEventListener('loadedmetadata', reportVideoSize);
+  video.addEventListener('resize', reportVideoSize);
   $('hubTrack').addEventListener('click', function (e) {
     if (!player) return;
     var r = $('hubTrack').getBoundingClientRect();

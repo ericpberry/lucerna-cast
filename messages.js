@@ -19,8 +19,8 @@
   var MAX_TEXT = 200;
   var MAX_SNAP_BASE64 = 48 * 1024;
   var MAX_UP_NEXT = 10;
-  var PHONE_TO_TV = ['hello', 'item', 'tiles', 'snap', 'snapUrl', 'status', 'queue', 'end', 'ping', 'pong'];
-  var TV_TO_PHONE = ['caps', 'state', 'error', 'want', 'ended', 'key', 'ping', 'pong'];
+  var PHONE_TO_TV = ['hello', 'item', 'tiles', 'snap', 'snapUrl', 'status', 'queue', 'end', 'catalog', 'ping', 'pong'];
+  var TV_TO_PHONE = ['caps', 'state', 'error', 'want', 'ended', 'key', 'size', 'tileCmd', 'ping', 'pong'];
 
   // ---- schema: [name, kind, default]. Kinds: int, long, float, bool, string, obj:<Name>, list:<Name>; a trailing ?
   // makes the field nullable (Kotlin `T?`). Defaults are the Kotlin defaults; field order is the Kotlin order.
@@ -28,9 +28,14 @@
   S.SnapshotConfig = [['fps', 'int', 4], ['height', 'int', 360], ['maxTiles', 'int', 3], ['transport', 'string', 'auto'], ['channelFps', 'int', 2]];
   S.NextUp = [['title', 'string', ''], ['startsInS', 'int', 15]];
   S.Crop = [['l', 'float', 0], ['t', 'float', 0], ['r', 'float', 1], ['b', 'float', 1]];
+  S.FrameRect = [['x', 'float', 0], ['y', 'float', 0], ['w', 'float', 1], ['h', 'float', 1]];
   S.TileSlotMsg = [['index', 'int', 0], ['itemId', 'string?', null], ['title', 'string', ''], ['live', 'bool', false],
     ['url', 'string?', null], ['crop', 'obj:Crop', 'new'], ['zoom', 'float', 1], ['note', 'string?', null],
-    ['paused', 'bool', false], ['site', 'string', '']];
+    ['paused', 'bool', false], ['site', 'string', ''], ['rect', 'obj:FrameRect?', null]];
+  S.CatalogEntry = [['id', 'string', ''], ['title', 'string', ''], ['site', 'string', ''], ['live', 'bool', false],
+    ['durationMs', 'long?', null], ['thumb', 'string?', null], ['vertical', 'bool', false], ['inTiles', 'bool', false]];
+  S.CatalogGroup = [['kind', 'string', 'found'], ['title', 'string', ''], ['site', 'string', ''], ['current', 'bool', false],
+    ['entries', 'list:CatalogEntry', 'new']];
   S.QueueEntry = [['id', 'string', ''], ['title', 'string', ''], ['live', 'bool', false], ['durationMs', 'long?', null]];
 
   var T = {};
@@ -41,7 +46,8 @@
     ['durationMs', 'long?', null], ['thumb', 'string?', null], ['next', 'obj:NextUp?', null], ['index', 'int', 1], ['count', 'int', 1],
     ['subtitleOffsetMs', 'long', 0]];
   T.tiles = [['seq', 'long', 0], ['layout', 'string', 'two'], ['slots', 'list:TileSlotMsg', 'new'], ['focused', 'int', 0],
-    ['audio', 'int', 0], ['mode', 'string', 'single'], ['muted', 'bool', false], ['othersPause', 'bool', false]];
+    ['audio', 'int', 0], ['mode', 'string', 'single'], ['muted', 'bool', false], ['othersPause', 'bool', false],
+    ['bigSize', 'string', 'm'], ['panel', 'obj:FrameRect?', null]];
   T.snap = [['seq', 'long', 0], ['tile', 'int', 0], ['jpeg', 'string?', null], ['w', 'int', 0], ['h', 'int', 0], ['at', 'long', 0]];
   T.snapUrl = [['seq', 'long', 0], ['tile', 'int', 0], ['url', 'string', '']];
   T.status = [['seq', 'long', 0], ['paused', 'bool', false], ['relayState', 'string', 'ok'], ['behindLiveS', 'float?', null]];
@@ -56,6 +62,9 @@
   T.want = [['seq', 'long', 0], ['itemId', 'string', '']];
   T.ended = [['seq', 'long', 0], ['itemId', 'string', '']];
   T.key = [['seq', 'long', 0], ['action', 'string', 'toggle'], ['n', 'int?', null]];
+  T.catalog = [['seq', 'long', 0], ['groups', 'list:CatalogGroup', 'new'], ['full', 'bool', false], ['discreet', 'bool', false]];
+  T.size = [['seq', 'long', 0], ['itemId', 'string', ''], ['w', 'int', 0], ['h', 'int', 0]];
+  T.tileCmd = [['seq', 'long', 0], ['action', 'string', 'catalog'], ['value', 'string', ''], ['n', 'int?', null], ['to', 'int?', null]];
   T.ping = [['seq', 'long', 0], ['at', 'long', 0]];
   T.pong = [['seq', 'long', 0], ['at', 'long', 0]];
 
