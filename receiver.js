@@ -506,7 +506,15 @@
    * or its chips (R-39). Tiles keep the same geometry whether the hub is showing or faded.
    */
   var TOUCH_BAND = 112;
-  function tileRects() { return layoutRects(S.tiles.layout, view.W, view.H - (S.touch ? TOUCH_BAND : 0)); }
+  function tileRects() {
+    // D-98: the open control bar sits under the grid (title above it): the grid makes room rather than being covered.
+    if (barUnderGrid()) {
+      return layoutRects(S.tiles.layout, view.W, view.H - BAR_HEAD_H - BAR_FOOT_H).map(function (r) { return { x: r.x, y: r.y + BAR_HEAD_H, w: r.w, h: r.h }; });
+    }
+    return layoutRects(S.tiles.layout, view.W, view.H - (S.touch ? TOUCH_BAND : 0));
+  }
+  var BAR_HEAD_H = 84, BAR_FOOT_H = 186;
+  function barUnderGrid() { return !!S.bar && !S.bar.single && !S.touch && tilesMode(); }
   /** 5% title safe (R-18): text and chips on video never sit closer to the frame edge than this (48 x 27 at 960 x 540). */
   function safeInsets(r, small) {
     var bx = small ? 10 : 16, by = small ? 10 : 14, sx = view.W * 0.05, sy = view.H * 0.05;
@@ -1134,7 +1142,6 @@
 
     cls(body, 'tiles-on', playing && !!mode);
     show($('exitHint'), t < S.exitUntil);
-    show($('gridHint'), playing && mode === 'focus' && !S.touch && !S.bar && !S.starting && t < S.overlayUntil && t >= S.exitUntil);
 
     // buffering (after a short delay, so a quick hiccup doesn't flash)
     var buffering = playing && (st === 'BUFFERING' || S.loading);
@@ -1284,7 +1291,7 @@
   function barSlot() { return S.tiles ? S.tiles.slots[S.tiles.audio] || S.tiles.slots[S.tiles.focused] || null : null; }
   /** The bar's buttons, left to right (only the visible ones); the progress line is the row above them (D-92). */
   function barButtons() {
-    return ['barToggle', 'barJump', 'barNext', 'barMute', 'barOthers', 'barFull']
+    return ['barJump', 'barPrev', 'barToggle', 'barNext', 'barMute', 'barOthers', 'barFull']
       .map(function (id) { return $(id); }).filter(function (b) { return b.offsetParent !== null; });
   }
   /** [from] is the tile to return to; -1 opens the bar for one video (D-96: the same bar as tiles). */
@@ -1309,14 +1316,20 @@
     // A bar for one video ends when tiles start, and a tiles bar when tiles end (the other kind opens fresh).
     var wrongKind = S.bar && !!S.bar.single === !!tilesMode();
     if (S.bar && (!on || (now() > S.bar.until && !(S.bar.single && S.barHeld)) || wrongKind)) { closeBar(); return; }
+    var wasUnder = body.classList.contains('bar-tiles');
     show(bar, on && !!S.bar);
     cls(body, 'bar-open', on && !!S.bar);
+    cls(body, 'bar-tiles', on && barUnderGrid());
+    if (wasUnder !== body.classList.contains('bar-tiles') && tileEls.length && S.tiles) buildTiles(false);   // the grid makes room
     if (!S.bar || !on) return;
     var single = !!S.bar.single;
     var slot = single ? null : barSlot();
     var live = single ? !!S.live : !!(slot && slot.live);
     setText($('barTitle'), S.hello.discreet ? '' : (slot && slot.title) || curTitle());
-    setText($('barSite'), single && !S.hello.discreet ? curSite() || '' : '');
+    var n = single ? 0 : S.tiles.slots.filter(function (x) { return !!x.itemId; }).length;
+    setText($('barSite'), S.hello.discreet ? '' : single ? curSite() || '' : n > 1 ? n + ' videos' : '');
+    var it = single ? currentItem() : null;
+    show($('barPrev'), single && !!(it && it.index > 1));
     show($('barMute'), !single);
     show($('barOthers'), !single);
     show($('barFull'), !single);
@@ -1334,10 +1347,12 @@
     show($('barJump'), live);
     show($('barLive'), live);
     var hours = dur >= 3600;
-    // m7: a paused live video says how far behind live it is, the same number the phone shows.
-    var timeText = !live && dur > 0 ? fmt(pos, hours) + ' / ' + fmt(dur, hours) : live && single && isPaused ? behindLiveText(behindLive()) : '';
+    // D-98: the time on the left of the line, the length on the right. m7: a paused live video says how far behind
+    // live it is, the same number the phone shows.
+    var timeText = !live && dur > 0 ? fmt(pos, hours) : live && single && isPaused ? behindLiveText(behindLive()) : '';
     setText($('barTime'), timeText);
     show($('barTime'), !!timeText);
+    setText($('barDur'), !live && dur > 0 ? fmt(dur, hours) : '');
     var frac = live ? 1 : dur > 0 ? clamp(pos / dur, 0, 1) : 0;
     $('barScrubFill').style.width = (frac * 100).toFixed(2) + '%';
     $('barKnob').style.left = (frac * 100).toFixed(2) + '%';
@@ -1526,6 +1541,7 @@
   $('barToggle').addEventListener('click', function () { send('key', { action: 'toggle' }); });
   $('barJump').addEventListener('click', function () { send('key', { action: 'jumpLive' }); });
   $('barNext').addEventListener('click', function () { send('key', { action: 'next' }); });
+  $('barPrev').addEventListener('click', function () { send('key', { action: 'previous' }); });
   $('barMute').addEventListener('click', function () { send('key', { action: 'mute' }); });
   $('barOthers').addEventListener('click', function () { send('key', { action: 'othersPause' }); });
   $('barFull').addEventListener('click', function () { send('key', { action: 'fill' }); closeBar(); });
