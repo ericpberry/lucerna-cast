@@ -1744,6 +1744,12 @@
     return Array.prototype.slice.call($('tpanel').querySelectorAll('button')).filter(function (b) { return b.offsetParent !== null && !b.disabled; });
   }
   function panelKey(k) {
+    // D-102: Back from an opened bookmark's videos goes back to the bookmarks, on the one it opened.
+    if (k === 'back' && S.panel && S.panel.kind === 'add' && S.panel.page) {
+      var from = S.panel.page; S.panel.page = null; renderPanel();
+      focusFirst([$('tpanel').querySelector('[data-key="add:' + from.replace(/"/g, '') + '"]')].concat(panelButtons()));
+      return;
+    }
     if (k === 'back') { closePanel(); return; }
     if (k === 'ok') { var a = document.activeElement; if ($('tpanel').contains(a)) a.click(); else focusFirst(panelButtons()); return; }
     if (k === 'left' || k === 'right') {
@@ -1806,18 +1812,27 @@
       setText($('tpTitle'), 'Add a video');
       setText($('tpSub'), 'Found on your phone, by tab');
       [['found', 'Found'], ['queue', 'Queue'], ['bookmarks', 'Bookmarks']].forEach(function (tb) {
-        tabs.appendChild(tchip(tb[1], 'tab:' + tb[0], p.tab === tb[0], function () { p.tab = tb[0]; renderPanel(); focusFirst([tabs.querySelector('[data-key="tab:' + tb[0] + '"]')]); }));
+        tabs.appendChild(tchip(tb[1], 'tab:' + tb[0], p.tab === tb[0], function () { p.tab = tb[0]; p.page = null; renderPanel(); focusFirst([tabs.querySelector('[data-key="tab:' + tb[0] + '"]')]); }));
       });
       var c = S.catalog;
+      // D-102: an opened bookmark (p.page, its entry id): its page's videos, once the phone has found them.
+      var page = c && p.page ? c.groups.filter(function (g) { return g.kind === 'page' && g.from === p.page; })[0] : null;
       if (!c) setText(msg, 'Asking your phone…');
       else if (c.discreet) setText(msg, 'Add videos from your phone.');
       else {
         if (c.full) setText(msg, '4 tiles already. Remove one to add another.');
-        var groups = c.groups.filter(function (g) { return g.kind === p.tab && g.entries.length; });
-        if (!groups.length && !c.full) setText(msg, p.tab === 'found' ? 'No videos found in your tabs yet.' : p.tab === 'queue' ? 'Nothing in the queue.' : 'No bookmarked videos.');
+        var groups = p.page ? (page && page.entries.length ? [page] : [])
+          : c.groups.filter(function (g) { return g.kind === p.tab && g.entries.length; });
+        if (p.page) {
+          var bm = null;
+          c.groups.forEach(function (g) { g.entries.forEach(function (en) { if (en.id === p.page) bm = en; }); });
+          setText($('tpSub'), M.cap(page ? page.title : bm ? bm.title : '') + ' · Back for bookmarks');
+          if (!page || page.state === 'opening') setText(msg, 'Opening the page…');
+          else if (!page.entries.length) setText(msg, 'No video found on that page.');
+        } else if (!groups.length && !c.full) setText(msg, p.tab === 'found' ? 'No videos found in your tabs yet.' : p.tab === 'queue' ? 'Nothing in the queue.' : 'No bookmarks yet.');
         groups.forEach(function (g) {
           var gr = el('div', 'grp');
-          gr.appendChild(el('span', 'glbl', g.kind === 'found' ? (g.current ? 'This tab' : M.cap(g.title) || M.cap(g.site)) : ''));
+          gr.appendChild(el('span', 'glbl', g.kind === 'found' ? (g.current ? 'This tab' : M.cap(g.title) || M.cap(g.site)) : g.kind === 'page' ? M.cap(g.site) : ''));
           var cards = el('div', 'crow');
           g.entries.forEach(function (en) {
             var b = el('button', 'acard' + (en.inTiles ? ' in' : ''));
@@ -1829,8 +1844,10 @@
             else if (en.durationMs) th.appendChild(el('span', 'abadge mono', fmt(en.durationMs / 1000, en.durationMs >= 3600000)));
             b.appendChild(th);
             b.appendChild(el('span', 'atitle', M.cap(en.title)));
-            b.appendChild(el('span', 'asub', en.inTiles ? 'In tiles' : ''));
+            b.appendChild(el('span', 'asub', en.inTiles ? 'In tiles' : en.page ? M.cap(en.site) : ''));
             b.addEventListener('click', function () {
+              // D-102: a bookmark opens its page; its videos are then offered here.
+              if (en.page) { p.page = en.id; send('tileCmd', { action: 'open', value: en.id }); renderPanel(); focusFirst([tabs.querySelector('[data-key="tab:bookmarks"]')]); return; }
               if (en.inTiles || c.full) return;
               send('tileCmd', { action: 'add', value: en.id });
               closePanel();

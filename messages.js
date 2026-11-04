@@ -33,9 +33,10 @@
     ['url', 'string?', null], ['crop', 'obj:Crop', 'new'], ['zoom', 'float', 1], ['note', 'string?', null],
     ['paused', 'bool', false], ['site', 'string', ''], ['rect', 'obj:FrameRect?', null]];
   S.CatalogEntry = [['id', 'string', ''], ['title', 'string', ''], ['site', 'string', ''], ['live', 'bool', false],
-    ['durationMs', 'long?', null], ['thumb', 'string?', null], ['vertical', 'bool', false], ['inTiles', 'bool', false]];
+    ['durationMs', 'long?', null], ['thumb', 'string?', null], ['vertical', 'bool', false], ['inTiles', 'bool', false],
+    ['page', 'bool', false]];
   S.CatalogGroup = [['kind', 'string', 'found'], ['title', 'string', ''], ['site', 'string', ''], ['current', 'bool', false],
-    ['entries', 'list:CatalogEntry', 'new']];
+    ['state', 'string?', null], ['from', 'string?', null], ['entries', 'list:CatalogEntry', 'new']];
   S.QueueEntry = [['id', 'string', ''], ['title', 'string', ''], ['live', 'bool', false], ['durationMs', 'long?', null]];
 
   var T = {};
