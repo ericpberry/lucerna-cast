@@ -1449,7 +1449,7 @@
     var it = single ? currentItem() : null;
     show($('barPrev'), single && !!(it && it.index > 1));
     show($('barMute'), !single);
-    show($('barAdd'), !single);
+    show($('barAdd'), true);   // D-103: one video's bar has Add a video too
     show($('barLayout'), !single);
     show($('barOthers'), !single && !lineup);   // D-99: a Lineup plays one video at a time
     show($('barFull'), !single && !lineup);
@@ -1720,7 +1720,8 @@
   }
 
   function openPanel(kind, tile) {
-    if (!tilesMode() && kind !== 'tile') return;
+    // D-103: one video's bar opens Add a video too (choosing one makes two tiles).
+    if (!tilesMode() && kind !== 'tile' && !(kind === 'add' && S.bar && S.bar.single)) return;
     if (kind === 'tile' && !(S.tiles && S.tiles.slots[tile] && S.tiles.slots[tile].itemId)) return;
     S.panel = { kind: kind, tab: 'found', tile: tile, opener: kind === 'tile' ? null : document.activeElement };
     if (kind === 'add') { S.catalog = null; send('tileCmd', { action: 'catalog' }); }
@@ -1772,7 +1773,7 @@
   /** Rebuilds the open panel, keeping the D-pad on the same thing (data-key). */
   function renderPanel() {
     var p = S.panel;
-    if (!p || !S.tiles) { show($('tpanel'), false); return; }
+    if (!p || (!S.tiles && p.kind !== 'add')) { show($('tpanel'), false); return; }
     var a = document.activeElement, key = a && $('tpanel').contains(a) ? a.getAttribute('data-key') : null;
     show($('tpanel'), true);
     cls(body, 'panel-open', true);
@@ -1781,7 +1782,7 @@
     cls($('tpanel'), 'tp-tile', p.kind === 'tile');
     var row = $('tpRow'), tabs = $('tpTabs'), extra = $('tpExtra'), msg = $('tpMsg');
     row.textContent = ''; tabs.textContent = ''; extra.textContent = ''; setText(msg, '');
-    var n = S.tiles.slots.filter(function (s) { return !!s.itemId; }).length;
+    var n = S.tiles ? S.tiles.slots.filter(function (s) { return !!s.itemId; }).length : 1;
     if (p.kind === 'layout') {
       setText($('tpTitle'), 'Layout');
       setText($('tpSub'), n + ' videos · Back closes');
